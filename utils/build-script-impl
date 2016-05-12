@@ -194,6 +194,8 @@ KNOWN_SETTINGS=(
     cross-compile-hosts         ""               "space-separated list of targets to cross-compile host Swift tools for"
     cross-compile-with-host-tools  ""            "set to use the clang we build for the host to then build the cross-compile hosts"
     cross-compile-install-prefixes      ""       "semicolon-separated list of install prefixes to use for the cross-compiled hosts. The list expands, so if there are more cross-compile hosts than prefixes, unmatched hosts use the last prefix in the list"
+    cross-compile-toolchains    ""               "Cross compile toolchains path. The (unprefixed) toolchain binaries for cross-compiled targets will be looked for in target-specific subdirectories of this path."
+    cross-compile-sysroots      ""               "Cross compile sysroots path. The sysroots for cross-compiled targets will be looked for in target-specific subdirectories of this path."
     skip-merge-lipo-cross-compile-tools ""       "set to skip running merge-lipo after installing cross-compiled host Swift tools"
     darwin-deployment-version-osx     "10.9"     "minimum deployment target version for OS X"
     darwin-deployment-version-ios     "7.0"      "minimum deployment target version for iOS"
@@ -1126,6 +1128,33 @@ function is_cross_tools_host() {
     done
 }
 
+function get_pkg_config_path() {
+    eval ARG=$1
+    FIND_RESULT=$(find $ARG -name pkgconfig -type d -print0 | xargs -0 printf '%s:')
+    IFS=':'
+    for e in $PKG_CONFIG_PATHS; do
+        eval e=$e # expand ~ in path
+        EXTRA+="$(realpath $e):"
+    done
+    IFS=
+    for p in $FIND_RESULT $EXTRA; do
+        RESULT+="${p}"
+    done
+    echo $RESULT | sed 's/:$//'
+}
+
+function toolchain_file() {
+    case ${1} in
+        linux-armv7|linux-armv6)
+            echo "${SWIFT_SOURCE_DIR}/cmake/modules/Toolchain-linux-arm.cmake"
+            ;;
+        *)
+            echo "unknown cross target"
+            exit 1
+            ;;
+    esac
+}
+
 # When building cross-compilers for these hosts,
 # merge all of their contents together with lipo
 function should_include_host_in_lipo() {
@@ -1820,6 +1849,19 @@ for host in "${ALL_HOSTS[@]}"; do
 
     if [[ $(is_cross_tools_host ${host}) ]] ; then
 
+        cross_compile_sysroot="${CROSS_COMPILE_SYSROOTS}/${host}/"
+        cross_compile_toolchain="${CROSS_COMPILE_TOOLCHAINS}/${host}/"
+        # Allows find_package to find packages in the sysroot
+        PKG_CONFIG_PATH=$(get_pkg_config_path ${cross_compile_sysroot})
+        export PKG_CONFIG_PATH
+
+        common_cmake_options_host+=(
+            -DCMAKE_SYSROOT:PATH="${cross_compile_sysroot}"
+            -DCMAKE_C_COMPILER_EXTERNAL_TOOLCHAIN:PATH="${cross_compile_toolchain}"
+            -DCMAKE_TOOLCHAIN_FILE=$(toolchain_file ${host})
+            -DCMAKE_TOOLCHAIN_HOST_TRIPLE:STRING="${SWIFT_HOST_TRIPLE}"
+        )
+
         if [[ "${CROSS_COMPILE_WITH_HOST_TOOLS}" ]]; then
             # Optionally use the freshly-built host copy of clang to build
             # for foreign hosts.
@@ -2401,7 +2443,12 @@ for host in "${ALL_HOSTS[@]}"; do
                 if [[ $(is_cross_tools_host ${host}) ]]; then
                     FOUNDATION_BUILD_ARGS+=(
                         "--target=${SWIFT_HOST_TRIPLE}"
+                        "--sysroot=${CROSS_COMPILE_SYSROOTS}/${host}/"
+                        "--toolchain=${CROSS_COMPILE_TOOLCHAINS}/${host}/"
                     )
+                    if [[ "${USE_GOLD_LINKER}" ]]; then
+                        FOUNDATION_BUILD_ARGS+=("--linker=gold")
+                    fi
                 fi
 
                 # FIXME: Foundation doesn't build from the script on OS X
