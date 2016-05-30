@@ -34,8 +34,7 @@ endfunction()
 #     deployment_version # Deployment version
 #     xcrun_name         # SDK name to use with xcrun
 #     version_min_name   # The name used in the -mOS-version-min flag
-#     triple_name        # The name used in Swift's -triple
-#     architectures      # A list of architectures this SDK supports
+#     triple             # The Swift triple for this SDK
 #   )
 #
 # Sadly there are three OS naming conventions.
@@ -52,12 +51,10 @@ endfunction()
 #   SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION  Deployment version (e.g., 10.9, 7.0)
 #   SWIFT_SDK_${prefix}_LIB_SUBDIR          Library subdir for this SDK
 #   SWIFT_SDK_${prefix}_VERSION_MIN_NAME    Version min name for this SDK
-#   SWIFT_SDK_${prefix}_TRIPLE_NAME         Triple name for this SDK
-#   SWIFT_SDK_${prefix}_ARCHITECTURES       Architectures (as a list)
-#   SWIFT_SDK_${prefix}_ARCH_${ARCH}_TRIPLE Triple name
+#   SWIFT_SDK_${prefix}_TRIPLE              Triple for this SDK
 macro(configure_sdk_darwin
     prefix name deployment_version xcrun_name
-    version_min_name triple_name architectures)
+    version_min_name triple)
   # Note: this has to be implemented as a macro because it sets global
   # variables.
 
@@ -94,13 +91,7 @@ macro(configure_sdk_darwin
   set(SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION "${deployment_version}")
   set(SWIFT_SDK_${prefix}_LIB_SUBDIR "${xcrun_name}")
   set(SWIFT_SDK_${prefix}_VERSION_MIN_NAME "${version_min_name}")
-  set(SWIFT_SDK_${prefix}_TRIPLE_NAME "${triple_name}")
-  set(SWIFT_SDK_${prefix}_ARCHITECTURES "${architectures}")
-
-  foreach(arch ${architectures})
-    set(SWIFT_SDK_${prefix}_ARCH_${arch}_TRIPLE
-        "${arch}-apple-${SWIFT_SDK_${prefix}_TRIPLE_NAME}${SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION}")
-  endforeach()
+  set(SWIFT_SDK_${prefix}_TRIPLE "${triple}")
 
   # Add this to the list of known SDKs.
   list(APPEND SWIFT_CONFIGURED_SDKS "${prefix}")
@@ -109,7 +100,7 @@ macro(configure_sdk_darwin
 endmacro()
 
 macro(configure_sdk_unix
-    prefix name lib_subdir triple_name arch triple sdkpath)
+    prefix name lib_subdir triple sdkpath)
   # Note: this has to be implemented as a macro because it sets global
   # variables.
 
@@ -120,10 +111,7 @@ macro(configure_sdk_unix
   set(SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION "don't use")
   set(SWIFT_SDK_${prefix}_LIB_SUBDIR "${lib_subdir}")
   set(SWIFT_SDK_${prefix}_VERSION_MIN_NAME "")
-  set(SWIFT_SDK_${prefix}_TRIPLE_NAME "${triple_name}")
-  set(SWIFT_SDK_${prefix}_ARCHITECTURES "${arch}")
-
-  set(SWIFT_SDK_${prefix}_ARCH_${arch}_TRIPLE "${triple}")
+  set(SWIFT_SDK_${prefix}_TRIPLE "${triple}")
 
   # Add this to the list of known SDKs.
   list(APPEND SWIFT_CONFIGURED_SDKS "${prefix}")
@@ -144,7 +132,6 @@ function(configure_target_variant prefix name sdk build_config lib_subdir)
   set(SWIFT_VARIANT_${prefix}_DEPLOYMENT_VERSION ${SWIFT_SDK_${sdk}_DEPLOYMENT_VERSION})
   set(SWIFT_VARIANT_${prefix}_LIB_SUBDIR         "${lib_subdir}/${SWIFT_SDK_${sdk}_LIB_SUBDIR}")
   set(SWIFT_VARIANT_${prefix}_VERSION_MIN_NAME   ${SWIFT_SDK_${sdk}_VERSION_MIN_NAME})
-  set(SWIFT_VARIANT_${prefix}_TRIPLE_NAME        ${SWIFT_SDK_${sdk}_TRIPLE_NAME})
-  set(SWIFT_VARIANT_${prefix}_ARCHITECTURES      ${SWIFT_SDK_${sdk}_ARCHITECTURES})
+  set(SWIFT_VARIANT_${prefix}_TRIPLE             ${SWIFT_SDK_${sdk}_TRIPLE})
 endfunction()
 

@@ -119,7 +119,7 @@ set(SWIFT_INSTALL_COMPONENTS "${_SWIFT_KNOWN_INSTALL_COMPONENTS}" CACHE STRING
 # * toolchain-dev-tools -- install development tools useful in a shared toolchain
 # * dev -- headers and libraries required to use Swift compiler as a library.
 
-set(SWIFT_SDKS "" CACHE STRING
+set(SWIFT_DEPLOYMENT_TARGETS "" CACHE STRING
     "If non-empty, limits building target binaries only to specified SDKs (despite other SDKs being available)")
 
 set(SWIFT_PRIMARY_VARIANT_SDK "" CACHE STRING
@@ -410,51 +410,97 @@ function(check_working_std_regex result_var_name)
 endfunction()
 check_working_std_regex(SWIFT_HAVE_WORKING_STD_REGEX)
 
-# If SWIFT_HOST_VARIANT_SDK not given, try to detect from the CMAKE_SYSTEM_NAME.
-if(SWIFT_HOST_VARIANT_SDK)
-  set(SWIFT_HOST_VARIANT_SDK_default "${SWIFT_HOST_VARIANT_SDK}")
-else()
-  if("${CMAKE_SYSTEM_NAME}" STREQUAL "Linux")
-    set(SWIFT_HOST_VARIANT_SDK_default "LINUX")
-  elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD")
-    set(SWIFT_HOST_VARIANT_SDK_default "FREEBSD")
-  elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "CYGWIN")
-    set(SWIFT_HOST_VARIANT_SDK_default "CYGWIN")
-  elseif("${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin")
-    set(SWIFT_HOST_VARIANT_SDK_default "OSX")
-  else()
-    message(FATAL_ERROR "Unable to detect SDK for host system: ${CMAKE_SYSTEM_NAME}")
-  endif()
-endif()
+# Returns all deployment target triples whose 'platform' (3rd) component matches
+# the given prefix
+function(get_platform_deployment_targets platform result_var_name)
+  
+  string(REGEX MATCHALL "([a-zA-Z0-9]+)-([a-zA-Z0-9]+)-(${platform}[0-9_\.]*)([-a-zA-Z0-9]+)" _matchedVars "${SWIFT_DEPLOYMENT_TARGETS}")
+  set("${result_var_name}" "${_matchedVars}" PARENT_SCOPE)
+  
+endfunction()
 
-# If SWIFT_HOST_VARIANT_ARCH not given, try to detect from the CMAKE_SYSTEM_PROCESSOR.
-if(SWIFT_HOST_VARIANT_ARCH)
-  set(SWIFT_HOST_VARIANT_ARCH_default, "${SWIFT_HOST_VARIANT_ARCH}")
-else()
-  if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64")
-    set(SWIFT_HOST_VARIANT_ARCH_default "x86_64")
-  elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "aarch64")
-    set(SWIFT_HOST_VARIANT_ARCH_default "aarch64")
-  elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "ppc64")
-    set(SWIFT_HOST_VARIANT_ARCH_default "powerpc64")
-  elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "ppc64le")
-    set(SWIFT_HOST_VARIANT_ARCH_default "powerpc64le")
-  elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "s390x")
-    set(SWIFT_HOST_VARIANT_ARCH_default "s390x")
-  # FIXME: Only matches v6l/v7l - by far the most common variants
-  elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armv6l")
-    set(SWIFT_HOST_VARIANT_ARCH_default "armv6")
-  elseif("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "armv7l")
-    set(SWIFT_HOST_VARIANT_ARCH_default "armv7")
-  else()
-    message(FATAL_ERROR "Unrecognized architecture on host system: ${CMAKE_SYSTEM_PROCESSOR}")
-  endif()
-endif()
+function(does_triple_match_platform triple platform result_var_name)
+    if( "${triple}" MATCHES "([a-zA-Z0-9]+)-([a-zA-Z0-9]+)-(${platform}[0-9_\.]*)([-a-zA-Z0-9]+)" )
+        set("${result_var_name}" 1 PARENT_SCOPE)
+    else()
+        unset("${result_var_name}" PARENT_SCOPE)
+    endif()
+endfunction()
 
-set(SWIFT_HOST_VARIANT_SDK "${SWIFT_HOST_VARIANT_SDK_default}" CACHE STRING
-    "Deployment sdk for Swift host tools (the compiler).")
-set(SWIFT_HOST_VARIANT_ARCH "${SWIFT_HOST_VARIANT_ARCH_default}" CACHE STRING
-    "Deployment arch for Swift host tools (the compiler).")
+# Extracts the system architecture component from a triple
+function(get_arch_from_triple triple result_var_name)
+
+  string(REPLACE "-" ";" triple_list "${triple}")
+  list(GET triple_list 0 arch)
+  set("${result_var_name}" "${arch}" PARENT_SCOPE)
+
+endfunction()
+
+# Parses an SDK name from a triple
+function(get_sdk_for_triple triple result_var_name)
+
+    unset("${result_var_name}" PARENT_SCOPE)
+
+    does_triple_match_platform(triple "linux-gnu" is_linux)
+    if( is_linux )
+      set("${result_var_name" "LINUX" PARENT_SCOPE)
+    endif()
+    does_triple_match_platform(triple "linux-android" is_android)
+    if( is_android )
+      set("${result_var_name" "ANDROID" PARENT_SCOPE)
+    endif()
+
+    does_triple_match_platform(triple "freebsd" is_freebsd)
+    if( is_freebsd )
+      set("${result_var_name" "FREEBSD" PARENT_SCOPE)
+    endif()
+    does_triple_match_platform(triple "windows-cygnu" is_cygwin)
+    if( is_cygwin )
+      set("${result_var_name" "CYGWIN" PARENT_SCOPE)
+    endif()
+
+    does_triple_match_platform(triple "macosx" is_osx)
+    if( is_osx )
+      set("${result_var_name" "OSX" PARENT_SCOPE)
+    endif()
+    does_triple_match_platform(triple "ios" is_ios)
+    if( is_ios )
+      get_arch_from_triple(triple triple_arch)
+      if( "${triple_arch}" MATCHES "(i386|x86_64)" )
+        set("${result_var_name" "IOS_SIMULATOR" PARENT_SCOPE)
+      else()
+        set("${result_var_name" "IOS" PARENT_SCOPE)
+      endif()
+    endif()
+    does_triple_match_platform(triple "tvos" is_tvos)
+    if( is_tvos )
+      get_arch_from_triple(triple triple_arch)
+      if( "${triple_arch}" STREQUAL "x86_64" )
+        set("${result_var_name" "TVOS_SIMULATOR" PARENT_SCOPE)
+      else()
+        set("${result_var_name" "TVOS" PARENT_SCOPE)
+      endif()
+    endif()
+    does_triple_match_platform(triple "watchos" is_watchos)
+    if( is_watchos )
+      get_arch_from_triple(triple triple_arch)
+      if( "${triple_arch}" STREQUAL "i386" )
+        set("${result_var_name" "WATCHOS_SIMULATOR" PARENT_SCOPE)
+      else()
+        set("${result_var_name" "WATCHOS" PARENT_SCOPE)
+      endif()
+    endif()
+
+endfunction()
+
+# Gets the value of the sysroot paramter for a triple
+function(get_sysroot_for_triple triple result_var_name)
+    
+    string(REPLACE "-" "_" triple_arg_part "${triple}")
+    string(TOUPPER triple_arg_part triple_arg_part)
+    set("${result_var_name}" "${SWIFT_${triple_arg_part}_SYSROOT}" PARENT_SCOPE)
+
+endfunction()
 
 #
 # Enable additional warnings.
@@ -465,31 +511,22 @@ swift_common_cxx_warnings()
 # Configure SDKs.
 #
 
-function(is_sdk_requested name result_var_name)
-  if("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "${name}")
-    set("${result_var_name}" "TRUE" PARENT_SCOPE)
-  else()
-    list(FIND SWIFT_SDKS "${name}" sdk_index)
-    if(${sdk_index} EQUAL -1)
-      set("${result_var_name}" "FALSE" PARENT_SCOPE)
-    else()
-      set("${result_var_name}" "TRUE" PARENT_SCOPE)
-    endif()
-  endif()
-endfunction()
+# SWIFT_HOST_TRIPLE is required.
+if(SWIFT_HOST_TRIPLE STREQUAL "")
+  message(FATAL_ERROR "SWIFT_HOST_TRIPLE is required")
+endif()
 
-# FIXME: the parameters we specify in SWIFT_SDKS are lacking architecture specifics,
-# so we need to hard-code it. For example, the SDK for Android is just 'ANDROID', 
-# which we assume below to be armv7. 
-# The iOS SDKs all have their architectures hardcoded because they are just specified by name (e.g. 'IOS' or 'WATCHOS').
-# We can't cross-compile the standard library for another linux architecture,
-# because the SDK list would just be 'LINUX' and we couldn't disambiguate it from the host.
-# 
-# To fix it, we would need to append the architecture to the SDKs,
-# for example: 'OSX-x86_64;IOS-armv7;...etc'.
-# We could easily do that - we have all of that information in build-script-impl.
-# Also, we would need to be provided with the sysroot for each SDK (see SWIFT_ANDROID_SDK_PATH/SWIFT_SDK_ANDROID_PATH).
-# Darwin targets cheat and use `xcrun`.
+get_arch_from_triple(SWIFT_HOST_TRIPLE SWIFT_HOST_VARIANT_ARCH_default)
+get_sdk_for_triple(SWIFT_HOST_TRIPLE SWIFT_HOST_VARIANT_SDK_default)
+
+if("${SWIFT_HOST_VARIANT_SDK_default}" STREQUAL "")
+  message(FATAL_ERROR "Unable to parse SDK name from host triple: ${SWIFT_HOST_TRIPLE}")
+endif()
+
+set(SWIFT_HOST_VARIANT_SDK "${SWIFT_HOST_VARIANT_SDK_default}" CACHE STRING
+    "Deployment sdk for Swift host tools (the compiler).")
+set(SWIFT_HOST_VARIANT_ARCH "${SWIFT_HOST_VARIANT_ARCH_default}" CACHE STRING
+    "Deployment arch for Swift host tools (the compiler).")
 
 if("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "LINUX")
   
@@ -497,47 +534,58 @@ if("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "LINUX")
   set(SWIFT_HOST_VARIANT "linux" CACHE STRING
       "Deployment OS for Swift host tools (the compiler) [linux].")
 
-  # Calculate the host triple
-  if("${SWIFT_HOST_TRIPLE}" STREQUAL "")
-    if("${SWIFT_HOST_VARIANT_ARCH}" STREQUAL "x86_64")
-      set(SWIFT_HOST_TRIPLE "x86_64-unknown-linux-gnu")
-    elseif("${SWIFT_HOST_VARIANT_ARCH}" STREQUAL "aarch64")
-      set(SWIFT_HOST_TRIPLE "aarch64-unknown-linux-gnu")
-    elseif("${SWIFT_HOST_VARIANT_ARCH}" MATCHES "(powerpc64|powerpc64le)")
-      set(SWIFT_HOST_TRIPLE "${SWIFT_HOST_VARIANT_ARCH}-unknown-linux-gnu")
-    elseif("${SWIFT_HOST_VARIANT_ARCH}" MATCHES "s390x")
-      set(SWIFT_HOST_TRIPLE "s390x-unknown-linux-gnu")
-    elseif("${SWIFT_HOST_VARIANT_ARCH}" MATCHES "(armv6|armv7)")
-      set(SWIFT_HOST_TRIPLE "${SWIFT_HOST_VARIANT_ARCH}-unknown-linux-gnueabihf")
-    else()
-      message(FATAL_ERROR "Unable to calculate triple for linux host on ${SWIFT_HOST_VARIANT_ARCH}")
+  # Configure the host
+  configure_sdk_unix(LINUX "Linux_${SWIFT_HOST_VARIANT_ARCH}" "linux" "linux" "${SWIFT_HOST_TRIPLE}" "${CMAKE_SYSROOT}")
+  set(SWIFT_PRIMARY_VARIANT_SDK_default  "${SWIFT_HOST_VARIANT_SDK}")
+  set(SWIFT_PRIMARY_VARIANT_ARCH_default "${SWIFT_HOST_VARIANT_ARCH}")
+
+  # Compatible cross-compile SDKS for LINUX: LINUX (triple: x-x-linux-gnu*), ANDROID (triple: x-x-linux-android*)
+
+  # LINUX
+  get_platform_deployment_targets("linux-gnu" linux_deployment_targets)
+  foreach(target_triple IN linux_deployment_targets)
+    if("${target_triple}" STREQUAL "${SWIFT_HOST_TRIPLE}")
+      continue()
     endif()
-  endif()
 
-  # Should we build the standard library for the host?
-  is_sdk_requested(LINUX swift_build_linux)
-  if(swift_build_linux)
-    configure_sdk_unix(LINUX "Linux" "linux" "${SWIFT_HOST_VARIANT}" "${SWIFT_HOST_VARIANT_ARCH}" "${SWIFT_HOST_TRIPLE}" "/")
-    set(SWIFT_PRIMARY_VARIANT_SDK_default  "${SWIFT_HOST_VARIANT_SDK}")
-    set(SWIFT_PRIMARY_VARIANT_ARCH_default "${SWIFT_HOST_VARIANT_ARCH}")
-  endif()
+    # Look for a sysroot variable
+    get_sysroot_for_triple(target_triple target_sysroot)
+    if("${target_sysroot}" STREQUAL "")
+      message(FATAL_ERROR "No sysroot for target: ${triple}")
+    endif()
+    get_arch_from_triple(target_triple target_arch)
+    configure_sdk_unix(LINUX "Linux_${target_arch}" "linux" "linux" "${target_triple}" "${target_sysroot}")
+  endforeach()
 
-  # Compatible cross-compile SDKS for LINUX: ANDROID (arch always armv7)
-  is_sdk_requested(ANDROID swift_build_android)
-  if("${SWIFT_ANDROID_NDK_PATH}" STREQUAL "")
-    set(swift_can_crosscompile_stdlib_android FALSE)
-  else()
-    set(swift_can_crosscompile_stdlib_android TRUE)
-  endif()
+  # ANDROID
+  get_platform_deployment_targets("linux-android" android_deployment_targets)
+  foreach(target_triple IN android_deployment_targets)
 
-  if(swift_build_android AND ${swift_can_crosscompile_stdlib_android})
-    configure_sdk_unix(ANDROID "Android" "android" "android" "armv7" "armv7-none-linux-androideabi" "${SWIFT_ANDROID_SDK_PATH}")
+    # FIXME: Do Android archs other than armv7 work?
+    get_arch_from_triple(target_triple target_arch)
+    if(NOT "${target_arch}" STREQUAL "armv7")
+      message(FATAL_ERROR "armv7 is only supported Android arch. Unsupported target: ${triple}")
+    endif()
+
+    # Check that the Android NDK is given
+    if("${SWIFT_ANDROID_NDK_PATH}" STREQUAL "")
+      message(FATAL_ERROR "Android NDK is required to build for ${target_triple}")
+    endif()
+
+    # Look for a sysroot
+    get_sysroot_for_triple(target_triple target_sysroot)
+    if("${target_sysroot}" STREQUAL "")
+      message(FATAL_ERROR "No sysroot for target: ${triple}")
+    endif()
+
+    configure_sdk_unix(ANDROID "Android_${target_arch}" "android" "android" "${target_triple}" "${target_triple}")
     # If we're not building for the host, the cross-compiled target should be the 'primary variant'.
     if("${swift_build_linux}" STREQUAL "FALSE")
       set(SWIFT_PRIMARY_VARIANT_SDK_default "ANDROID")
-      set(SWIFT_PRIMARY_VARIANT_ARCH_default "armv7")
+      set(SWIFT_PRIMARY_VARIANT_ARCH_default "${target_arch}")
     endif()
-  endif()
+
+  endforeach()
 
 elseif("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "FREEBSD")
   
@@ -549,7 +597,7 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "FREEBSD")
   # cross-compilation.
   string(REPLACE "[-].*" "" FREEBSD_SYSTEM_VERSION ${CMAKE_SYSTEM_VERSION})
   message(STATUS "FreeBSD Version: ${FREEBSD_SYSTEM_VERSION}")
-  configure_sdk_unix(FREEBSD "FreeBSD" "freebsd" "freebsd" "x86_64"
+  configure_sdk_unix(FREEBSD "FreeBSD_x86_64" "freebsd" "freebsd"
     "x86_64-unknown-freebsd${FREEBSD_SYSTEM_VERSION}" "/")
   set(SWIFT_PRIMARY_VARIANT_SDK_default  "${SWIFT_HOST_VARIANT_SDK}")
   set(SWIFT_PRIMARY_VARIANT_ARCH_default "x86_64")
@@ -560,7 +608,7 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "CYGWIN")
   set(SWIFT_HOST_VARIANT "windows" CACHE STRING
       "Deployment OS for Swift host tools (the compiler) [windows].")
   
-  configure_sdk_unix(CYGWIN "Cygwin" "windows" "cygwin" "windows" "x86_64-unknown-windows-cygnus" "/")
+  configure_sdk_unix(CYGWIN "Cygwin_x86_64" "windows" "cygwin" "x86_64-unknown-windows-cygnus" "/")
   set(SWIFT_PRIMARY_VARIANT_SDK_default  "${SWIFT_HOST_VARIANT_SDK}")
   set(SWIFT_PRIMARY_VARIANT_ARCH_default "x86_64")
 
@@ -579,15 +627,19 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" MATCHES "(OSX|IOS*|TVOS*|WATCHOS*)")
   message(STATUS "${xcode_version}")
   message(STATUS "")
 
-  is_sdk_requested(OSX swift_build_osx)
-  if(swift_build_osx)
+  # OSX is only ever a host. Never cross-compile the stdlib for OSX, even if requested.
+  if("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "OSX")
     configure_sdk_darwin(
-        OSX "OS X" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_OSX}"
+        "OSX_X86_64" "OS X" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_OSX}"
         macosx macosx macosx "x86_64")
-    configure_target_variant(OSX-DA "OS X Debug+Asserts"   OSX DA "Debug+Asserts")
-    configure_target_variant(OSX-RA "OS X Release+Asserts" OSX RA "Release+Asserts")
-    configure_target_variant(OSX-R  "OS X Release"         OSX R  "Release")
+    configure_target_variant(OSX-DA "OS X x86_64 Debug+Asserts"   OSX DA "Debug+Asserts")
+    configure_target_variant(OSX-RA "OS X x86_64 Release+Asserts" OSX RA "Release+Asserts")
+    configure_target_variant(OSX-R  "OS X x86_64 Release"         OSX R  "Release")
   endif()
+  # Primary variant is always OSX; even on iOS hosts.
+  set(SWIFT_PRIMARY_VARIANT_SDK_default "OSX")
+  set(SWIFT_PRIMARY_VARIANT_ARCH_default "x86_64")
+
 
   # Compatible cross-compile SDKS for Darwin OSes: IOS, IOS_SIMULATOR, TVOS,
   #   TVOS_SIMULATOR, WATCHOS, WATCHOS_SIMULATOR (archs hardcoded below).
@@ -601,71 +653,102 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" MATCHES "(OSX|IOS*|TVOS*|WATCHOS*)")
     set(swift_can_crosscompile_stdlib TRUE)
   endif()
 
-  is_sdk_requested(IOS swift_build_ios)
-  if(swift_build_ios AND ${swift_can_crosscompile_stdlib})
-    configure_sdk_darwin(
-        IOS "iOS" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_IOS}"
-        iphoneos ios ios "armv7;armv7s;arm64")
-    configure_target_variant(IOS-DA "iOS Debug+Asserts"   IOS DA "Debug+Asserts")
-    configure_target_variant(IOS-RA "iOS Release+Asserts" IOS RA "Release+Asserts")
-    configure_target_variant(IOS-R  "iOS Release"         IOS R "Release")
-  endif()
+  # IOS/IOS_SIMULATOR
+  get_platform_deployment_targets("ios" ios_deployment_targets)
+  foreach(target_triple IN ios_deployment_targets)
+    if(NOT "${SWIFT_HOST_TRIPLE}" STREQUAL "${target_triple}" AND NOT ${swift_can_crosscompile_stdlib})
+      message(FATAL_ERROR "Cannot cross-compile the swift stdlib")
+    endif()
 
-  is_sdk_requested(IOS_SIMULATOR swift_build_ios_simulator)
-  if(swift_build_ios_simulator AND ${swift_can_crosscompile_stdlib})
-    configure_sdk_darwin(
-        IOS_SIMULATOR "iOS Simulator" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_IOS}"
-        iphonesimulator ios-simulator ios "i386;x86_64")
-    configure_target_variant(
-        IOS_SIMULATOR-DA "iOS Debug+Asserts"   IOS_SIMULATOR DA "Debug+Asserts")
-    configure_target_variant(
-        IOS_SIMULATOR-RA "iOS Release+Asserts" IOS_SIMULATOR RA "Release+Asserts")
-    configure_target_variant(
-        IOS_SIMULATOR-R  "iOS Release"         IOS_SIMULATOR R "Release")
-  endif()
+    # iOS triples with i386/x86_64 architecture assumed to be iOS Simulator
+    get_arch_from_triple(target_triple target_arch)
+    get_sdk_for_triple(target_triple target_sdk)
 
-  is_sdk_requested(TVOS swift_build_tvos)
-  if(swift_build_tvos AND ${swift_can_crosscompile_stdlib})
+    if("${target_sdk}" STREQUAL "IOS_SIMULATOR")
+      set(target_prefix "IOS_SIMULATOR")
+      set(target_name "iOS Simulator")
+      set(target_xcrun_name "iphonesimulator")
+      set(target_versionmin_name "ios-simulator")
+    else()
+      set(target_prefix "IOS")
+      set(target_name "iOS")
+      set(target_xcrun_name "iphoneos")
+      set(target_versionmin_name "ios")
+    endif()
     configure_sdk_darwin(
-        TVOS "tvOS" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_TVOS}"
-        appletvos tvos tvos "arm64")
-    configure_target_variant(TVOS-DA "tvOS Debug+Asserts"   TVOS DA "Debug+Asserts")
-    configure_target_variant(TVOS-RA "tvOS Release+Asserts" TVOS RA "Release+Asserts")
-    configure_target_variant(TVOS-R  "tvOS Release"         TVOS R "Release")
-  endif()
-
-  is_sdk_requested(TVOS_SIMULATOR swift_build_tvos_simulator)
-  if(swift_build_tvos_simulator AND ${swift_can_crosscompile_stdlib})
-    configure_sdk_darwin(
-        TVOS_SIMULATOR "tvOS Simulator" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_TVOS}"
-        appletvsimulator tvos-simulator tvos "x86_64")
+          "${target_prefix}_${target_arch}" "${target_name}" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_IOS}"
+          "${target_xcrun_name}" "${target_versionmin_name}" "${target_triple}")
     configure_target_variant(
-      TVOS_SIMULATOR-DA "tvOS Debug+Asserts"   TVOS_SIMULATOR DA "Debug+Asserts")
+      "${target_prefix}_${target_arch}-DA" "iOS ${target_arch} Debug+Asserts"   "${target_prefix}_${target_arch}" DA "Debug+Asserts")
     configure_target_variant(
-      TVOS_SIMULATOR-RA "tvOS Release+Asserts" TVOS_SIMULATOR RA "Release+Asserts")
+      "${target_prefix}_${target_arch}-RA" "iOS ${target_arch} Release+Asserts" "${target_prefix}_${target_arch}" RA "Release+Asserts")
     configure_target_variant(
-      TVOS_SIMULATOR-R  "tvOS Release"         TVOS_SIMULATOR R "Release")
-  endif()
+      "${target_prefix}_${target_arch}-R"  "iOS ${target_arch} Release"         "${target_prefix}_${target_arch}" R  "Release")
+  endforeach()
 
-  is_sdk_requested(WATCHOS swift_build_watchos)
-  if(swift_build_watchos AND ${swift_can_crosscompile_stdlib})
-    configure_sdk_darwin(
-        WATCHOS "watchOS" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_WATCHOS}"
-        watchos watchos watchos "armv7k")
-    configure_target_variant(WATCHOS-DA "watchOS Debug+Asserts"   WATCHOS DA "Debug+Asserts")
-    configure_target_variant(WATCHOS-RA "watchOS Release+Asserts" WATCHOS RA "Release+Asserts")
-    configure_target_variant(WATCHOS-R  "watchOS Release"         WATCHOS R "Release")
-  endif()
+  # TVOS/TVOS_SIMULATOR
+  get_platform_deployment_targets("tvos" tvos_deployment_targets)
+  foreach(target_triple IN tvos_deployment_targets)
+    if(NOT "${SWIFT_HOST_TRIPLE}" STREQUAL "${target_triple}" AND NOT ${swift_can_crosscompile_stdlib})
+      message(FATAL_ERROR "Cannot cross-compile the swift stdlib")
+    endif()
 
-  is_sdk_requested(WATCHOS_SIMULATOR swift_build_watchos_simulator)
-  if(swift_build_watchos_simulator AND ${swift_can_crosscompile_stdlib})
+    get_arch_from_triple(target_triple target_arch)
+    get_sdk_for_triple(target_triple target_sdk)
+
+    if("${target_sdk}" STREQUAL "TVOS_SIMULATOR")
+      set(target_prefix "TVOS_SIMULATOR")
+      set(target_name "tvOS Simulator")
+      set(target_xcrun_name "appletvsimulator")
+      set(target_versionmin_name "tvos-simulator")
+    else()
+      set(target_prefix "TVOS")
+      set(target_name "tvOS")
+      set(target_xcrun_name "appletvos")
+      set(target_versionmin_name "tvos")
+    endif()
     configure_sdk_darwin(
-        WATCHOS_SIMULATOR "watchOS Simulator" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_WATCHOS}"
-        watchsimulator watchos-simulator watchos "i386")
-    configure_target_variant(WATCHOS_SIMULATOR-DA "watchOS Debug+Asserts"   WATCHOS_SIMULATOR DA "Debug+Asserts")
-    configure_target_variant(WATCHOS_SIMULATOR-RA "watchOS Release+Asserts" WATCHOS_SIMULATOR RA "Release+Asserts")
-    configure_target_variant(WATCHOS_SIMULATOR-R  "watchOS Release"         WATCHOS_SIMULATOR R "Release")
-  endif()
+          "${target_prefix}_${target_arch}" "${target_name}" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_TVOS}"
+          "${target_xcrun_name}" "${target_versionmin_name}" "${target_triple}")
+    configure_target_variant(
+      "${target_prefix}_${target_arch}-DA" "tvOS ${target_arch} Debug+Asserts"   "${target_prefix}_${target_arch}" DA "Debug+Asserts")
+    configure_target_variant(
+      "${target_prefix}_${target_arch}-RA" "tvOS ${target_arch} Release+Asserts" "${target_prefix}_${target_arch}" RA "Release+Asserts")
+    configure_target_variant(
+      "${target_prefix}_${target_arch}-R"  "tvOS ${target_arch} Release"         "${target_prefix}_${target_arch}" R  "Release")
+  endforeach()
+
+  # WATCHOS/WATCHOS_SIMULATOR
+  get_platform_deployment_targets("watchos" watchos_deployment_targets)
+  foreach(target_triple IN watchos_deployment_targets)
+    if(NOT "${SWIFT_HOST_TRIPLE}" STREQUAL "${target_triple}" AND NOT ${swift_can_crosscompile_stdlib})
+      message(FATAL_ERROR "Cannot cross-compile the swift stdlib")
+    endif()
+
+    get_arch_from_triple(target_triple target_arch)
+    get_sdk_for_triple(target_triple target_sdk)
+
+    if("${target_sdk}" STREQUAL "WATCHOS_SIMULATOR")
+      set(target_prefix "WATCHOS_SIMULATOR")
+      set(target_name "watchOS Simulator")
+      set(target_xcrun_name "watchsimulator")
+      set(target_versionmin_name "watchos-simulator")
+    else()
+      set(target_prefix "WATCHOS")
+      set(target_name "watchOS")
+      set(target_xcrun_name "watchos")
+      set(target_versionmin_name "watchos")
+    endif()
+    configure_sdk_darwin(
+          "${target_prefix}_${target_arch}" "${target_name}" "${SWIFT_DARWIN_DEPLOYMENT_VERSION_WATCHOS}"
+          "${target_xcrun_name}" "${target_versionmin_name}" "${target_triple}")
+    configure_target_variant(
+      "${target_prefix}_${target_arch}-DA" "tvOS ${target_arch} Debug+Asserts"   "${target_prefix}_${target_arch}" DA "Debug+Asserts")
+    configure_target_variant(
+      "${target_prefix}_${target_arch}-RA" "tvOS ${target_arch} Release+Asserts" "${target_prefix}_${target_arch}" RA "Release+Asserts")
+    configure_target_variant(
+      "${target_prefix}_${target_arch}-R"  "tvOS ${target_arch} Release"         "${target_prefix}_${target_arch}" R  "Release")
+  endforeach()
 
   # FIXME: guess target variant based on the host.
   # if(SWIFT_HOST_VARIANT MATCHES "^macosx")
@@ -679,9 +762,6 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" MATCHES "(OSX|IOS*|TVOS*|WATCHOS*)")
   # set(SWIFT_PRIMARY_VARIANT ${SWIFT_PRIMARY_VARIANT_GUESS} CACHE STRING
   #    "[OSX-DA, OSX-RA, OSX-R, IOS-DA, IOS-RA, IOS-R, IOS_SIMULATOR-DA, IOS_SIMULATOR-RA, IOS_SIMULATOR-R]")
   #
-  # Primary variant is always OSX; even on iOS hosts.
-  set(SWIFT_PRIMARY_VARIANT_SDK_default "OSX")
-  set(SWIFT_PRIMARY_VARIANT_ARCH_default "x86_64")
 
 endif()
 
@@ -690,16 +770,6 @@ if("${SWIFT_PRIMARY_VARIANT_SDK}" STREQUAL "")
 endif()
 if("${SWIFT_PRIMARY_VARIANT_ARCH}" STREQUAL "")
   set(SWIFT_PRIMARY_VARIANT_ARCH "${SWIFT_PRIMARY_VARIANT_ARCH_default}")
-endif()
-
-if("${SWIFT_SDKS}" STREQUAL "")
-  set(SWIFT_SDKS "${SWIFT_CONFIGURED_SDKS}")
-endif()
-
-list_subtract("${SWIFT_SDKS}" "${SWIFT_CONFIGURED_SDKS}" unknown_sdks)
-
-if(NOT "${unknown_sdks}" STREQUAL "")
-  message(FATAL_ERROR "Unknown SDKs: ${unknown_sdks}")
 endif()
 
 if("${SWIFT_CONFIGURED_SDKS}" STREQUAL "")
