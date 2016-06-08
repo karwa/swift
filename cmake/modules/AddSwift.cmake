@@ -1034,9 +1034,9 @@ function(add_swift_library name)
     set(SWIFTLIB_INSTALL_IN_COMPONENT dev)
   endif()
 
-  # If target SDKs are not specified, build for all known SDKs.
+  # If target SDKs are not specified, build for all configured SDKs.
   if("${SWIFTLIB_TARGET_SDKS}" STREQUAL "")
-    set(SWIFTLIB_TARGET_SDKS ${SWIFT_SDKS})
+    set(SWIFTLIB_TARGET_SDKS ${SWIFT_CONFIGURED_SDKS})
   endif()
 
   # All Swift code depends on the standard library, except for the standard
@@ -1083,12 +1083,13 @@ function(add_swift_library name)
     # If we are building this library for targets, loop through the various
     # SDKs building the variants of this library.
     list_intersect(
-        "${SWIFTLIB_TARGET_SDKS}" "${SWIFT_SDKS}" SWIFTLIB_TARGET_SDKS)
-    if(SWIFTLIB_HOST_LIBRARY)
+        "${SWIFTLIB_TARGET_SDKS}" "${SWIFT_CONFIGURED_SDKS}" SWIFTLIB_TARGET_SDKS)
+    if(SWIFTLIB_HOST_LIBRARY AND NOT SWIFT_SKIP_HOST_STDLIB)
       list_union(
           "${SWIFTLIB_TARGET_SDKS}" "${SWIFT_HOST_VARIANT_SDK}"
           SWIFTLIB_TARGET_SDKS)
     endif()
+
     foreach(sdk ${SWIFTLIB_TARGET_SDKS})
       set(THIN_INPUT_TARGETS)
 
@@ -1245,7 +1246,6 @@ function(add_swift_library name)
 
         # Determine the subdirectory where this library will be installed.
         set(resource_dir_sdk_subdir "${SWIFT_SDK_${sdk}_LIB_SUBDIR}")
-
         if("${resource_dir_sdk_subdir}" STREQUAL "")
           message(FATAL_ERROR "internal error: the variable should be non-empty")
         endif()
@@ -1538,7 +1538,7 @@ function(add_swift_target_executable name)
         swiftCore)
   endif()
 
-  foreach(sdk ${SWIFT_SDKS})
+  foreach(sdk ${SWIFT_CONFIGURED_SDKS})
     foreach(arch ${SWIFT_SDK_${sdk}_ARCHITECTURES})
       set(VARIANT_SUFFIX "-${SWIFT_SDK_${sdk}_LIB_SUBDIR}-${arch}")
       set(VARIANT_NAME "${name}${VARIANT_SUFFIX}")

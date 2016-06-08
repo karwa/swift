@@ -3,7 +3,7 @@
 # Each element in this list is an SDK for which the various
 # SWIFT_SDK_${name}_* variables are defined. Swift libraries will be
 # built for each variant.
-set(SWIFT_CONFIGURED_SDKS)
+set(SWIFT_CONFIGURED_SDKS "")
 
 # Report the given SDK to the user.
 function(_report_sdk prefix)
@@ -61,6 +61,22 @@ macro(configure_sdk_darwin
   # Note: this has to be implemented as a macro because it sets global
   # variables.
 
+  # Because we calculate our own triple, we need to validate
+  # architectures here.
+
+  set(OSX_VALID_ARCHITECTURES "x86_64")
+  set(IOS_VALID_ARCHITECTURES "armv7;armv7s;arm64")
+  set(TVOS_VALID_ARCHITECTURES "arm64")
+  set(WATCHOS_VALID_ARCHITECTURES "armv7k")
+  set(IOS_SIMULATOR_VALID_ARCHITECTURES "i386;x86_64")
+  set(TVOS_SIMULATOR_VALID_ARCHITECTURES "x86_64")
+  set(WATCHOS_SIMULATOR_VALID_ARCHITECTURES "i386")
+
+  list_subtract("${architectures}" "${${prefix}_VALID_ARCHITECTURES}" invalid_archs)
+  if(invalid_archs)
+    message(FATAL_ERROR "${invalid_archs} are not recognised architectures for ${name}")
+  endif()
+
   # Find the SDK
   set(SWIFT_SDK_${prefix}_PATH "" CACHE PATH "Path to the ${name} SDK")
 
@@ -104,6 +120,8 @@ macro(configure_sdk_darwin
 
   # Add this to the list of known SDKs.
   list(APPEND SWIFT_CONFIGURED_SDKS "${prefix}")
+  set(SWIFT_CONFIGURED_SDKS "${SWIFT_CONFIGURED_SDKS}" CACHE STRING
+      "The SDKs which have been configured to build")
 
   _report_sdk("${prefix}")
 endmacro()
@@ -127,6 +145,8 @@ macro(configure_sdk_unix
 
   # Add this to the list of known SDKs.
   list(APPEND SWIFT_CONFIGURED_SDKS "${prefix}")
+  set(SWIFT_CONFIGURED_SDKS "${SWIFT_CONFIGURED_SDKS}" CACHE STRING
+      "The SDKs which have been configured to build")
 
   _report_sdk("${prefix}")
 endmacro()

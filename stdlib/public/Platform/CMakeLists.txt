@@ -29,7 +29,7 @@ add_swift_library(${swift_platform_name} IS_SDK_OVERLAY
     ${swift_platform_flags})
 
 set(glibc_modulemap_target_list)
-foreach(sdk ${SWIFT_SDKS})
+foreach(sdk ${SWIFT_CONFIGURED_SDKS})
   if("${sdk}" STREQUAL "LINUX" OR
      "${sdk}" STREQUAL "FREEBSD" OR
      "${sdk}" STREQUAL "ANDROID" OR
