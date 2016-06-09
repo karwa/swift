@@ -18,7 +18,7 @@ configure_file(
   ${SOURCEKIT_BINARY_DIR}/include/SourceKit/Config/config.h)
 
 set(SOURCEKIT_DEPLOYMENT_OS "${SWIFT_HOST_VARIANT}")
-set(SOURCEKIT_DEPLOYMENT_TARGET "${SWIFT_SDK_${SWIFT_HOST_VARIANT_SDK}_DEPLOYMENT_VERSION}")
+set(SOURCEKIT_DEPLOYMENT_TARGET "${SWIFT_SDK_${SWIFT_HOST_DEPLOYMENT_TARGET}_DEPLOYMENT_VERSION}")
 
 function(add_sourcekit_symbol_exports target_name export_file)
   # Makefile.rules contains special cases for different platforms.

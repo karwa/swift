@@ -505,6 +505,9 @@ if(SWIFT_HOST)
      "${SWIFT_HOST_VARIANT_ARCH_default}" STREQUAL "")
       message(FATAL_ERROR "Invalid SWIFT_HOST; cannot be parsed.")
   endif()
+  # Normalize SWIFT_HOST so that we can reliably use it as a deployment target.
+  set(SWIFT_HOST_DEPLOYMENT_TARGET "${SWIFT_HOST}" CACHE STRING 
+    "The Deployment Target of the Swift compiler's host machine.")
 else()
 
   # Derive SDK
@@ -541,7 +544,8 @@ else()
   endif()
 
   # Set SWIFT_HOST
-  set(SWIFT_HOST "${SWIFT_HOST_VARIANT_SDK}-${SWIFT_HOST_VARIANT_ARCH}")
+  set(SWIFT_HOST_DEPLOYMENT_TARGET "${SWIFT_HOST_VARIANT_SDK}_${SWIFT_HOST_VARIANT_ARCH}" CACHE STRING 
+    "The Deployment Target of the Swift compiler's host machine.")
 endif()
 
 set(SWIFT_HOST_VARIANT_SDK "${SWIFT_HOST_VARIANT_SDK_default}" CACHE STRING
@@ -575,9 +579,11 @@ if("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "LINUX")
       message(FATAL_ERROR "Unsupported Linux target: ${SWIFT_HOST_VARIANT_ARCH}")
     endif()
 
-    configure_sdk_unix(LINUX "Linux" "linux" "${SWIFT_HOST_VARIANT}" "${SWIFT_HOST_VARIANT_ARCH}" "${SWIFT_HOST_TRIPLE}" "${CMAKE_SYSROOT}")
+    configure_sdk_unix(LINUX "Linux" "linux" "${SWIFT_HOST_VARIANT}" "${SWIFT_HOST_VARIANT_ARCH}" "${SWIFT_HOST_TRIPLE}" "${CMAKE_SYSROOT}" SWIFT_HOST_DEPLOYMENT_TARGET_default)
+
     set(SWIFT_PRIMARY_VARIANT_SDK_default  "${SWIFT_HOST_VARIANT_SDK}")
     set(SWIFT_PRIMARY_VARIANT_ARCH_default "${SWIFT_HOST_VARIANT_ARCH}")
+    set(SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET_default "${SWIFT_HOST_DEPLOYMENT_TARGET_default}")
   endif()
 
   # Configure additional (cross-compile) targets.
@@ -597,7 +603,7 @@ if("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "LINUX")
       if("${SWIFT_ANDROID_NDK_PATH}" STREQUAL "")
         message(FATAL_ERROR "Android NDK Path is required")
       endif()
-      configure_sdk_unix(ANDROID "Android" "android" "android" "${target_arch}" "${target_triple}" "${SWIFT_ANDROID_SDK_PATH}")
+      configure_sdk_unix(ANDROID "Android" "android" "android" "${target_arch}" "${target_triple}" "${SWIFT_ANDROID_SDK_PATH}" cross_deployment_target)
     else()
       message(FATAL_ERROR "We don't support cross-compiling for ${target_sdk} on Linux yet")
     endif()
@@ -607,6 +613,7 @@ if("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "LINUX")
        "${SWIFT_PRIMARY_VARIANT_SDK_default}" STREQUAL "")
       set(SWIFT_PRIMARY_VARIANT_SDK_default "${target_sdk}")
       set(SWIFT_PRIMARY_VARIANT_ARCH_default "${target_arch}")
+      set(SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET_default "${cross_deployment_target}")
     endif()
 
   endforeach()
@@ -622,9 +629,11 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "FREEBSD")
     message(FATAL_ERROR "Unsupported FreeBSD target: ${SWIFT_HOST_VARIANT_ARCH}")
   endif()
   
-  configure_sdk_unix(FREEBSD "FreeBSD" "freebsd" "${SWIFT_HOST_VARIANT}" "${SWIFT_HOST_VARIANT_ARCH}" "${SWIFT_HOST_TRIPLE}" "${CMAKE_SYSROOT}")
+  configure_sdk_unix(FREEBSD "FreeBSD" "freebsd" "${SWIFT_HOST_VARIANT}" "${SWIFT_HOST_VARIANT_ARCH}" "${SWIFT_HOST_TRIPLE}" "${CMAKE_SYSROOT}" SWIFT_HOST_DEPLOYMENT_TARGET_default)
+
   set(SWIFT_PRIMARY_VARIANT_SDK_default  "${SWIFT_HOST_VARIANT_SDK}")
   set(SWIFT_PRIMARY_VARIANT_ARCH_default "${SWIFT_HOST_VARIANT_ARCH}")
+  set(SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET_default "${SWIFT_HOST_DEPLOYMENT_TARGET_default}")
   
 elseif("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "CYGWIN")
   
@@ -640,9 +649,11 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" STREQUAL "CYGWIN")
   # FIXME: The arguments here look incorrect
   # - 'cygwin' should be 'windows' (the variant, as above)
   # - 'windows' should be '${SWIFT_HOST_VARIANT_ARCH}' (the architecture)
-  configure_sdk_unix(CYGWIN "Cygwin" "windows" "cygwin" "windows" "${SWIFT_HOST_TRIPLE}" "${CMAKE_SYSROOT}")
+  configure_sdk_unix(CYGWIN "Cygwin" "windows" "cygwin" "windows" "${SWIFT_HOST_TRIPLE}" "${CMAKE_SYSROOT}" SWIFT_HOST_DEPLOYMENT_TARGET_default)
+
   set(SWIFT_PRIMARY_VARIANT_SDK_default  "${SWIFT_HOST_VARIANT_SDK}")
   set(SWIFT_PRIMARY_VARIANT_ARCH_default "${SWIFT_HOST_VARIANT_ARCH}")
+  set(SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET_default "${SWIFT_HOST_DEPLOYMENT_TARGET_default}")
 
 elseif("${SWIFT_HOST_VARIANT_SDK}" MATCHES "(OSX|IOS*|TVOS*|WATCHOS*)")
 
@@ -749,6 +760,13 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" MATCHES "(OSX|IOS*|TVOS*|WATCHOS*)")
     configure_target_variant(WATCHOS_SIMULATOR-R  "watchOS Release"         WATCHOS_SIMULATOR R "Release")
   endif()
 
+  # Find out the host's deployment target
+  foreach(deployment_target in ${SWIFT_SDK_TARGETS_FOR_${SWIFT_HOST_VARIANT_SDK}})
+    if("${SWIFT_SDK_${deployment_target}_ARCHITECTURE}" STREQUAL "${SWIFT_HOST_VARIANT_ARCH}")
+      set(SWIFT_HOST_DEPLOYMENT_TARGET_default "${deployment_target}")
+    endif()
+  endforeach()
+
   # FIXME: guess target variant based on the host.
   # if(SWIFT_HOST_VARIANT MATCHES "^macosx")
   #   set(SWIFT_PRIMARY_VARIANT_GUESS "OSX-R")
@@ -764,8 +782,14 @@ elseif("${SWIFT_HOST_VARIANT_SDK}" MATCHES "(OSX|IOS*|TVOS*|WATCHOS*)")
   # Primary variant is always OSX; even on iOS hosts.
   set(SWIFT_PRIMARY_VARIANT_SDK_default "OSX")
   set(SWIFT_PRIMARY_VARIANT_ARCH_default "x86_64")
+  set(SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET_default "OSX_x86_64")
 else()
   message(FATAL_ERROR "Unknown Host")
+endif()
+
+if(NOT "${SWIFT_HOST_DEPLOYMENT_TARGET_default}" STREQUAL "")
+  set(SWIFT_HOST_DEPLOYMENT_TARGET "${SWIFT_HOST_DEPLOYMENT_TARGET_default}" CACHE STRING 
+        "The Deployment Target of the Swift compiler's host machine.")
 endif()
 
 if("${SWIFT_PRIMARY_VARIANT_SDK}" STREQUAL "")
@@ -773,6 +797,9 @@ if("${SWIFT_PRIMARY_VARIANT_SDK}" STREQUAL "")
 endif()
 if("${SWIFT_PRIMARY_VARIANT_ARCH}" STREQUAL "")
   set(SWIFT_PRIMARY_VARIANT_ARCH "${SWIFT_PRIMARY_VARIANT_ARCH_default}")
+endif()
+if("${SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET}" STREQUAL "")
+  set(SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET "${SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET_default}")
 endif()
 
 if(NOT SWIFT_SKIP_HOST_STDLIB)
@@ -785,9 +812,9 @@ endforeach()
 list(REMOVE_DUPLICATES requested_sdks)
 list_subtract("${requested_sdks}" "${SWIFT_CONFIGURED_SDKS}" unknown_sdks)
 
-if(NOT "${unknown_sdks}" STREQUAL "")
-  message(FATAL_ERROR "${unknown_sdks} was requested but not configured.")
-endif()
+# if(NOT "${unknown_sdks}" STREQUAL "")
+#   message(FATAL_ERROR "${unknown_sdks} was requested but not configured.")
+# endif()
 
 if("${SWIFT_CONFIGURED_SDKS}" STREQUAL "")
   message(FATAL_ERROR "No SDKs selected.")
@@ -802,13 +829,12 @@ if("${SWIFT_HOST_VARIANT_ARCH}" STREQUAL "")
 endif()
 
 set(SWIFT_PRIMARY_VARIANT_SUFFIX
-    "-${SWIFT_SDK_${SWIFT_PRIMARY_VARIANT_SDK}_LIB_SUBDIR}-${SWIFT_PRIMARY_VARIANT_ARCH}")
+    "-${SWIFT_SDK_${SWIFT_PRIMARY_VARIANT_DEPLOYMENT_TARGET}_LIB_SUBDIR}-${SWIFT_PRIMARY_VARIANT_ARCH}")
 
 # Clear universal library names to prevent adding duplicates
-unset(UNIVERSAL_LIBRARY_NAMES_${SWIFT_SDK_${SWIFT_HOST_VARIANT_SDK}_LIB_SUBDIR} CACHE)
-foreach(stdlib_target ${SWIFT_CROSS_COMPILE_STDLIB_TARGETS})
-  get_sdk_from_stdlib_target("${stdlib_target}" target_sdk)
-  unset(UNIVERSAL_LIBRARY_NAMES_${SWIFT_SDK_${target_sdk}_LIB_SUBDIR} CACHE)
+unset(UNIVERSAL_LIBRARY_NAMES_${SWIFT_SDK_${SWIFT_HOST_DEPLOYMENT_TARGET}_LIB_SUBDIR} CACHE)
+foreach(deployment_target ${SWIFT_CONFIGURED_SDKS})
+  unset(UNIVERSAL_LIBRARY_NAMES_${SWIFT_SDK_${deployment_target}_LIB_SUBDIR} CACHE)
 endforeach()
 
 if(SWIFT_PARALLEL_LINK_JOBS)
@@ -822,7 +848,7 @@ endif()
 
 # Set the CMAKE_OSX_* variables in a way that minimizes conflicts.
 if("${CMAKE_SYSTEM_NAME}" STREQUAL "Darwin")
-  set(CMAKE_OSX_SYSROOT "${SWIFT_SDK_${SWIFT_HOST_VARIANT_SDK}_PATH}")
+  set(CMAKE_OSX_SYSROOT "${SWIFT_SDK_${SWIFT_HOST_DEPLOYMENT_TARGET}_PATH}")
   set(CMAKE_OSX_ARCHITECTURES "")
   set(CMAKE_OSX_DEPLOYMENT_TARGET "")
 endif()

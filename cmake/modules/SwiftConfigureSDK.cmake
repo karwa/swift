@@ -3,7 +3,8 @@
 # Each element in this list is an SDK for which the various
 # SWIFT_SDK_${name}_* variables are defined. Swift libraries will be
 # built for each variant.
-set(SWIFT_CONFIGURED_SDKS "")
+set(SWIFT_CONFIGURED_SDKS "") # TODO: Rename to SWIFT_CONFIGURED_TARGETS
+set(SWIFT_CONFIGURED_SDK_NAMES "")
 
 # Report the given SDK to the user.
 function(_report_sdk prefix)
@@ -14,14 +15,8 @@ function(_report_sdk prefix)
   message(STATUS "  Deployment version: ${SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION}")
   message(STATUS "  Library subdir: ${SWIFT_SDK_${prefix}_LIB_SUBDIR}")
   message(STATUS "  Version min name: ${SWIFT_SDK_${prefix}_VERSION_MIN_NAME}")
-  message(STATUS "  Triple name: ${SWIFT_SDK_${prefix}_TRIPLE_NAME}")
-  message(STATUS "  Architectures: ${SWIFT_SDK_${prefix}_ARCHITECTURES}")
-
-  foreach(arch ${SWIFT_SDK_${prefix}_ARCHITECTURES})
-    message(STATUS
-        "  Triple for ${arch} is ${SWIFT_SDK_${prefix}_ARCH_${arch}_TRIPLE}")
-  endforeach()
-
+  message(STATUS "  Triple: ${SWIFT_SDK_${prefix}_ARCH_${arch}_TRIPLE}")
+  message(STATUS "  Architectures: ${SWIFT_SDK_${prefix}_ARCHITECTURE}")
   message(STATUS "")
 endfunction()
 
@@ -78,16 +73,12 @@ macro(configure_sdk_darwin
   endif()
 
   # Find the SDK
-  set(SWIFT_SDK_${prefix}_PATH "" CACHE PATH "Path to the ${name} SDK")
-
-  if(NOT SWIFT_SDK_${prefix}_PATH)
-    execute_process(
-        COMMAND "xcrun" "--sdk" "${xcrun_name}" "--show-sdk-path"
-        OUTPUT_VARIABLE SWIFT_SDK_${prefix}_PATH
-        OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if(NOT EXISTS "${SWIFT_SDK_${prefix}_PATH}/System/Library/Frameworks/module.map")
-      message(FATAL_ERROR "${name} SDK not found at ${SWIFT_SDK_${prefix}_PATH}.")
-    endif()
+  execute_process(
+      COMMAND "xcrun" "--sdk" "${xcrun_name}" "--show-sdk-path"
+      OUTPUT_VARIABLE SWIFT_SDK_${prefix}_PATH
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if(NOT EXISTS "${SWIFT_SDK_${prefix}_PATH}/System/Library/Frameworks/module.map")
+    message(FATAL_ERROR "${name} SDK not found at ${SWIFT_SDK_${prefix}_PATH}.")
   endif()
 
   if(NOT EXISTS "${SWIFT_SDK_${prefix}_PATH}/System/Library/Frameworks/module.map")
@@ -104,26 +95,37 @@ macro(configure_sdk_darwin
     COMMAND "xcodebuild" "-sdk" "${SWIFT_SDK_${prefix}_PATH}" "-version" "ProductBuildVersion"
       OUTPUT_VARIABLE SWIFT_SDK_${prefix}_BUILD_NUMBER
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-  # Set other variables.
-  set(SWIFT_SDK_${prefix}_NAME "${name}")
-  set(SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION "${deployment_version}")
-  set(SWIFT_SDK_${prefix}_LIB_SUBDIR "${xcrun_name}")
-  set(SWIFT_SDK_${prefix}_VERSION_MIN_NAME "${version_min_name}")
-  set(SWIFT_SDK_${prefix}_TRIPLE_NAME "${triple_name}")
-  set(SWIFT_SDK_${prefix}_ARCHITECTURES "${architectures}")
-
+  
+  unset(SWIFT_SDK_TARGETS_FOR_${prefix})
   foreach(arch ${architectures})
-    set(SWIFT_SDK_${prefix}_ARCH_${arch}_TRIPLE
-        "${arch}-apple-${SWIFT_SDK_${prefix}_TRIPLE_NAME}${SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION}")
+    # Set other variables.
+    set(prefix_arch "${prefix}_${arch}")
+    set(SWIFT_SDK_${prefix_arch}_SDK_ID "${prefix}")
+    set(SWIFT_SDK_${prefix_arch}_NAME "${name}")
+    set(SWIFT_SDK_${prefix_arch}_PATH "${SWIFT_SDK_${prefix}_PATH}")
+    set(SWIFT_SDK_${prefix_arch}_VERSION "${SWIFT_SDK_${prefix}_VERSION}")
+    set(SWIFT_SDK_${prefix_arch}_BUILD_NUMBER "${SWIFT_SDK_${prefix}_BUILD_NUMBER}")
+    set(SWIFT_SDK_${prefix_arch}_DEPLOYMENT_VERSION "${deployment_version}")
+    set(SWIFT_SDK_${prefix_arch}_LIB_SUBDIR "${xcrun_name}")
+    set(SWIFT_SDK_${prefix_arch}_VERSION_MIN_NAME "${version_min_name}")
+    set(SWIFT_SDK_${prefix_arch}_TRIPLE_NAME "${triple_name}")
+    set(SWIFT_SDK_${prefix_arch}_ARCHITECTURE "${arch}")
+    set(SWIFT_SDK_${prefix_arch}_ARCH_${arch}_TRIPLE
+        "${arch}-apple-${triple_name}${deployment_version}")
+    
+    list(APPEND SWIFT_CONFIGURED_SDKS "${prefix_arch}")
+    list(APPEND SWIFT_SDK_TARGETS_FOR_${prefix} "${prefix_arch}")
+    list(APPEND SWIFT_SDK_NAMES "${prefix}")
+
+    message("Configured targets for ${prefix}: ${SWIFT_SDK_TARGETS_FOR_${prefix}}")
+
+    _report_sdk("${prefix_arch}")
   endforeach()
 
   # Add this to the list of known SDKs.
-  list(APPEND SWIFT_CONFIGURED_SDKS "${prefix}")
   set(SWIFT_CONFIGURED_SDKS "${SWIFT_CONFIGURED_SDKS}" CACHE STRING
       "The SDKs which have been configured to build")
 
-  _report_sdk("${prefix}")
 endmacro()
 
 macro(configure_sdk_unix
@@ -131,24 +133,33 @@ macro(configure_sdk_unix
   # Note: this has to be implemented as a macro because it sets global
   # variables.
 
-  set(SWIFT_SDK_${prefix}_NAME "${name}")
-  set(SWIFT_SDK_${prefix}_PATH "${sdkpath}")
-  set(SWIFT_SDK_${prefix}_VERSION "don't use")
-  set(SWIFT_SDK_${prefix}_BUILD_NUMBER "don't use")
-  set(SWIFT_SDK_${prefix}_DEPLOYMENT_VERSION "don't use")
-  set(SWIFT_SDK_${prefix}_LIB_SUBDIR "${lib_subdir}")
-  set(SWIFT_SDK_${prefix}_VERSION_MIN_NAME "")
-  set(SWIFT_SDK_${prefix}_TRIPLE_NAME "${triple_name}")
-  set(SWIFT_SDK_${prefix}_ARCHITECTURES "${arch}")
+  # Hack: We can clear this variable now because the host is always the
+  # first to configure.
+  if("${arch}" STREQUAL "${SWIFT_HOST_VARIANT_ARCH}")
+    unset(SWIFT_SDK_TARGETS_FOR_${prefix})
+  endif()
 
-  set(SWIFT_SDK_${prefix}_ARCH_${arch}_TRIPLE "${triple}")
+  set(prefix_arch "${prefix}_${arch}")
+  set(SWIFT_SDK_${prefix_arch}_SDK_ID "${prefix}")
+  set(SWIFT_SDK_${prefix_arch}_NAME "${name}")
+  set(SWIFT_SDK_${prefix_arch}_PATH "${sdkpath}")
+  set(SWIFT_SDK_${prefix_arch}_VERSION "don't use")
+  set(SWIFT_SDK_${prefix_arch}_BUILD_NUMBER "don't use")
+  set(SWIFT_SDK_${prefix_arch}_DEPLOYMENT_VERSION "don't use")
+  set(SWIFT_SDK_${prefix_arch}_LIB_SUBDIR "${lib_subdir}")
+  set(SWIFT_SDK_${prefix_arch}_VERSION_MIN_NAME "")
+  set(SWIFT_SDK_${prefix_arch}_TRIPLE_NAME "${triple_name}")
+  set(SWIFT_SDK_${prefix_arch}_ARCHITECTURE "${arch}")
+  set(SWIFT_SDK_${prefix_arch}_ARCH_${arch}_TRIPLE "${triple}")
 
   # Add this to the list of known SDKs.
-  list(APPEND SWIFT_CONFIGURED_SDKS "${prefix}")
+  list(APPEND SWIFT_CONFIGURED_SDKS "${prefix_arch}")
   set(SWIFT_CONFIGURED_SDKS "${SWIFT_CONFIGURED_SDKS}" CACHE STRING
       "The SDKs which have been configured to build")
+  list(APPEND SWIFT_SDK_TARGETS_FOR_${prefix} "${prefix_arch}")
+  list(APPEND SWIFT_SDK_NAMES "${prefix}")
 
-  _report_sdk("${prefix}")
+  _report_sdk("${prefix_arch}")
 endmacro()
 
 # Configure a variant of a certain SDK
@@ -165,6 +176,6 @@ function(configure_target_variant prefix name sdk build_config lib_subdir)
   set(SWIFT_VARIANT_${prefix}_LIB_SUBDIR         "${lib_subdir}/${SWIFT_SDK_${sdk}_LIB_SUBDIR}")
   set(SWIFT_VARIANT_${prefix}_VERSION_MIN_NAME   ${SWIFT_SDK_${sdk}_VERSION_MIN_NAME})
   set(SWIFT_VARIANT_${prefix}_TRIPLE_NAME        ${SWIFT_SDK_${sdk}_TRIPLE_NAME})
-  set(SWIFT_VARIANT_${prefix}_ARCHITECTURES      ${SWIFT_SDK_${sdk}_ARCHITECTURES})
+  set(SWIFT_VARIANT_${prefix}_ARCHITECTURE      ${SWIFT_SDK_${sdk}_ARCHITECTURES})
 endfunction()
 

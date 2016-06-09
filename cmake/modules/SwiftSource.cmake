@@ -9,7 +9,7 @@ function(handle_swift_sources
     dependency_target_out_var_name sourcesvar externalvar name)
   cmake_parse_arguments(SWIFTSOURCES
       "IS_MAIN;IS_STDLIB;IS_STDLIB_CORE;IS_SDK_OVERLAY"
-      "SDK;ARCHITECTURE;INSTALL_IN_COMPONENT"
+      "DEPLOYMENT_TARGET;INSTALL_IN_COMPONENT"
       "DEPENDS;API_NOTES;COMPILE_FLAGS"
       ${ARGN})
   translate_flag(${SWIFTSOURCES_IS_MAIN} "IS_MAIN" IS_MAIN_arg)
@@ -24,12 +24,8 @@ function(handle_swift_sources
   endif()
 
   # Check arguments.
-  if ("${SWIFTSOURCES_SDK}" STREQUAL "")
-    message(FATAL_ERROR "Should specify an SDK")
-  endif()
-
-  if ("${SWIFTSOURCES_ARCHITECTURE}" STREQUAL "")
-    message(FATAL_ERROR "Should specify an architecture")
+  if ("${SWIFTSOURCES_DEPLOYMENT_TARGET}" STREQUAL "")
+    message(FATAL_ERROR "Should specify a Deployment Target")
   endif()
 
   if("${SWIFTSOURCES_INSTALL_IN_COMPONENT}" STREQUAL "")
@@ -66,8 +62,7 @@ function(handle_swift_sources
       get_filename_component(swift_obj_base ${swift_obj_base} NAME_WE)
     endif()
 
-    compute_library_subdir(SWIFTSOURCES_LIBRARY_SUBDIR
-      "${SWIFTSOURCES_SDK}" "${SWIFTSOURCES_ARCHITECTURE}")
+    compute_library_subdir(SWIFTSOURCES_LIBRARY_SUBDIR "${SWIFTSOURCES_DEPLOYMENT_TARGET}")
     set(objsubdir "/${SWIFTSOURCES_LIBRARY_SUBDIR}")
 
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}${objsubdir}")
@@ -89,8 +84,7 @@ function(handle_swift_sources
         SOURCES ${swift_sources}
         DEPENDS ${SWIFTSOURCES_DEPENDS}
         FLAGS ${swift_compile_flags}
-        SDK ${SWIFTSOURCES_SDK}
-        ARCHITECTURE ${SWIFTSOURCES_ARCHITECTURE}
+        DEPLOYMENT_TARGET ${SWIFTSOURCES_DEPLOYMENT_TARGET}
         API_NOTES ${SWIFTSOURCES_API_NOTES}
         ${IS_MAIN_arg}
         ${IS_STDLIB_arg}
@@ -123,29 +117,28 @@ endfunction()
 # Compile a swift file into an object file (as a library).
 #
 # Usage:
-#   _compile_swift_files(OUTPUT objfile # Name of the resulting object file
-#     SOURCES swift_src [swift_src...]  # Swift source files to compile
-#     FLAGS -module-name foo            # Flags to add to the compilation
-#     [SDK sdk]                         # SDK to build for
-#     [ARCHITECTURE architecture]       # Architecture to build for
-#     [DEPENDS cmake_target...]         # CMake targets on which the object
-#                                       # file depends.
-#     [IS_MAIN]                         # This is an executable, not a library
+#   _compile_swift_files(OUTPUT objfile     # Name of the resulting object file
+#     SOURCES swift_src [swift_src...]      # Swift source files to compile
+#     FLAGS -module-name foo                # Flags to add to the compilation
+#     [DEPLOYMENT_TARGET deployment_target] # Deployment Target to build for
+#     [DEPENDS cmake_target...]             # CMake targets on which the object
+#                                           # file depends.
+#     [IS_MAIN]                             # This is an executable, not a library
 #     [IS_STDLIB]
-#     [IS_STDLIB_CORE]                  # This is the core standard library
-#     [OPT_FLAGS]                       # Optimization flags (overrides SWIFT_OPTIMIZE)
-#     [MODULE_DIR]                      # Put .swiftmodule, .swiftdoc., and .o
-#                                       # into this directory.
-#     [MODULE_NAME]                     # The module name. If not specified, the name
-#                                       # is derived from the output name
-#     [IS_STDLIB]                       # Install produced files.
-#     [EMIT_SIB]                        # Emit the file as a sib file instead of a .o
+#     [IS_STDLIB_CORE]                      # This is the core standard library
+#     [OPT_FLAGS]                           # Optimization flags (overrides SWIFT_OPTIMIZE)
+#     [MODULE_DIR]                          # Put .swiftmodule, .swiftdoc., and .o
+#                                           # into this directory.
+#     [MODULE_NAME]                         # The module name. If not specified, the name
+#                                           # is derived from the output name
+#     [IS_STDLIB]                           # Install produced files.
+#     [EMIT_SIB]                            # Emit the file as a sib file instead of a .o
 #     )
 function(_compile_swift_files dependency_target_out_var_name)
   cmake_parse_arguments(SWIFTFILE
     "IS_MAIN;IS_STDLIB;IS_STDLIB_CORE;IS_SDK_OVERLAY;EMIT_SIB"
     "OUTPUT;MODULE_NAME;INSTALL_IN_COMPONENT"
-    "SOURCES;FLAGS;DEPENDS;SDK;ARCHITECTURE;API_NOTES;OPT_FLAGS;MODULE_DIR"
+    "SOURCES;FLAGS;DEPENDS;DEPLOYMENT_TARGET;API_NOTES;OPT_FLAGS;MODULE_DIR"
     ${ARGN})
 
   # Check arguments.
@@ -166,12 +159,8 @@ function(_compile_swift_files dependency_target_out_var_name)
     message(FATAL_ERROR "Cannot set both IS_MAIN and IS_STDLIB")
   endif()
 
-  if("${SWIFTFILE_SDK}" STREQUAL "")
-    message(FATAL_ERROR "Should specify an SDK")
-  endif()
-
-  if("${SWIFTFILE_ARCHITECTURE}" STREQUAL "")
-    message(FATAL_ERROR "Should specify an architecture")
+  if("${SWIFTFILE_DEPLOYMENT_TARGET}" STREQUAL "")
+    message(FATAL_ERROR "Should specify a Deployment Target")
   endif()
 
   if("${SWIFTFILE_INSTALL_IN_COMPONENT}" STREQUAL "")
@@ -193,15 +182,14 @@ function(_compile_swift_files dependency_target_out_var_name)
   set(swift_flags)
 
   _add_variant_swift_compile_flags(
-      "${SWIFTFILE_SDK}"
-      "${SWIFTFILE_ARCHITECTURE}"
+      "${SWIFTFILE_DEPLOYMENT_TARGET}"
       "${SWIFT_STDLIB_BUILD_TYPE}"
       "${SWIFT_STDLIB_ASSERTIONS}"
       swift_flags)
 
   # Determine the subdirectory where the binary should be placed.
   compute_library_subdir(library_subdir
-      "${SWIFTFILE_SDK}" "${SWIFTFILE_ARCHITECTURE}")
+      "${SWIFTFILE_DEPLOYMENT_TARGET}")
 
   # Allow import of other Swift modules we just built.
   list(APPEND swift_flags
@@ -341,7 +329,7 @@ function(_compile_swift_files dependency_target_out_var_name)
         COMMAND
         "${swift_compiler_tool}" "-apinotes" "-yaml-to-binary"
         "-o" "${apinote_file}"
-        "-target" "${SWIFT_SDK_${SWIFTFILE_SDK}_ARCH_${SWIFTFILE_ARCHITECTURE}_TRIPLE}"
+        "-target" "${SWIFT_SDK_${SWIFTFILE_DEPLOYMENT_TARGET}_ARCH_${SWIFT_SDK_${SWIFTFILE_DEPLOYMENT_TARGET}_ARCHITECTURE}_TRIPLE}"
         "${apinote_input_file}")
       list(APPEND depends_create_apinotes "${apinote_input_file}")
 

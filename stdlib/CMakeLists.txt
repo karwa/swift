@@ -11,19 +11,19 @@ else()
 endif()
 
 add_custom_target(swift-stdlib-all)
-foreach(SDK ${SWIFT_CONFIGURED_SDKS})
-  add_custom_target("swift-stdlib-${SWIFT_SDK_${SDK}_LIB_SUBDIR}")
-  add_custom_target("swift-test-stdlib-${SWIFT_SDK_${SDK}_LIB_SUBDIR}")
-  foreach(ARCH ${SWIFT_SDK_${SDK}_ARCHITECTURES})
-    set(VARIANT_SUFFIX "-${SWIFT_SDK_${SDK}_LIB_SUBDIR}-${ARCH}")
-    add_custom_target("swift-stdlib${VARIANT_SUFFIX}")
-    add_custom_target("swift-test-stdlib${VARIANT_SUFFIX}")
-    add_dependencies(swift-stdlib-all "swift-stdlib${VARIANT_SUFFIX}")
-    add_dependencies("swift-stdlib-${SWIFT_SDK_${SDK}_LIB_SUBDIR}"
-        "swift-stdlib${VARIANT_SUFFIX}")
-    add_dependencies("swift-test-stdlib-${SWIFT_SDK_${SDK}_LIB_SUBDIR}"
-        "swift-test-stdlib${VARIANT_SUFFIX}")
-  endforeach()
+foreach(deployment_target ${SWIFT_CONFIGURED_SDKS})
+  add_custom_target("swift-stdlib-${SWIFT_SDK_${deployment_target}_LIB_SUBDIR}")
+  add_custom_target("swift-test-stdlib-${SWIFT_SDK_${deployment_target}_LIB_SUBDIR}")
+  
+  set(VARIANT_SUFFIX "-${SWIFT_SDK_${deployment_target}_LIB_SUBDIR}-${ARCH}")
+  add_custom_target("swift-stdlib${VARIANT_SUFFIX}")
+  add_custom_target("swift-test-stdlib${VARIANT_SUFFIX}")
+  add_dependencies(swift-stdlib-all "swift-stdlib${VARIANT_SUFFIX}")
+  add_dependencies("swift-stdlib-${SWIFT_SDK_${deployment_target}_LIB_SUBDIR}"
+      "swift-stdlib${VARIANT_SUFFIX}")
+  add_dependencies("swift-test-stdlib-${SWIFT_SDK_${deployment_target}_LIB_SUBDIR}"
+      "swift-test-stdlib${VARIANT_SUFFIX}")
+
 endforeach()
 add_custom_target(swift-stdlib
     DEPENDS "swift-stdlib${SWIFT_PRIMARY_VARIANT_SUFFIX}")
