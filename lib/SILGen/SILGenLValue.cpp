@@ -2189,17 +2189,27 @@ static SILValue emitLoadOfSemanticRValue(SILGenFunction &gen,
 
   // For @unowned(safe) types, we need to strip the unowned box.
   if (auto unownedType = storageType.getAs<UnownedStorageType>()) {
-    if (!unownedType->isLoadable(ResilienceExpansion::Maximal)) {
-      return gen.B.createLoadUnowned(loc, src, isTake);
+    bool isLoadable = false;
+    // Look inside Optional
+    if (auto underlyingType = unownedType.getReferentType().getAnyOptionalObjectType()) {
+      isLoadable = underlyingType->usesNativeReferenceCounting(ResilienceExpansion::Maximal);
+      isLoadable = false;
+    }
+    else {
+      isLoadable = unownedType->isLoadable(ResilienceExpansion::Maximal);
     }
 
-    auto unownedValue = gen.B.createLoad(loc, src);
-    gen.B.createStrongRetainUnowned(loc, unownedValue, Atomicity::Atomic);
-    if (isTake)
-      gen.B.createUnownedRelease(loc, unownedValue, Atomicity::Atomic);
-    return gen.B.createUnownedToRef(
-        loc, unownedValue,
-        SILType::getPrimitiveObjectType(unownedType.getReferentType()));
+    if (isLoadable) {
+      auto unownedValue = gen.B.createLoad(loc, src);
+      gen.B.createStrongRetainUnowned(loc, unownedValue, Atomicity::Atomic);
+      if (isTake)
+        gen.B.createUnownedRelease(loc, unownedValue, Atomicity::Atomic);
+      return gen.B.createUnownedToRef(loc, unownedValue,
+                                      SILType::getPrimitiveObjectType(unownedType.getReferentType()));
+    }
+    else {
+      return gen.B.createLoadUnowned(loc, src, isTake);
+    }
   }
 
   // For @unowned(unsafe) types, we need to strip the unmanaged box.
@@ -2235,6 +2245,10 @@ static void emitStoreOfSemanticRValue(SILGenFunction &gen,
                                       IsInitialization_t isInit) {
   auto storageType = dest->getType();
 
+  llvm::errs()<<"EMIT SEMANTIC RVAL STORE \n";
+  dest->getType().dump();
+  value->getType().dump();
+
   // For @weak types, we need to break down an Optional<T> and then
   // emit the storeWeak ourselves.
   if (storageType.is<WeakStorageType>()) {
@@ -2248,21 +2262,34 @@ static void emitStoreOfSemanticRValue(SILGenFunction &gen,
   // For @unowned(safe) types, we need to enter the unowned box by
   // turning the strong retain into an unowned retain.
   if (auto unownedType = storageType.getAs<UnownedStorageType>()) {
-    // FIXME: resilience
-    if (!unownedType->isLoadable(ResilienceExpansion::Maximal)) {
-      gen.B.createStoreUnowned(loc, value, dest, isInit);
+    bool isLoadable = false;
+    // Look inside Optional
+    if (auto underlyingType = unownedType.getReferentType().getAnyOptionalObjectType()) {
 
-      // store_unowned doesn't take ownership of the input, so cancel it out.
+      llvm::errs()<<"STORE IN TO OPTIONAL \n";
+      underlyingType.dump();
+
+      isLoadable = underlyingType->usesNativeReferenceCounting(ResilienceExpansion::Maximal);
+      isLoadable = false;
+    }
+    else {
+      isLoadable = unownedType->isLoadable(ResilienceExpansion::Maximal);
+    }
+    // FIXME: resilience
+    if (isLoadable) {
+      auto unownedValue = gen.B.createRefToUnowned(loc, value, storageType.getObjectType());
+      gen.B.createUnownedRetain(loc, unownedValue, Atomicity::Atomic);
+      emitUnloweredStoreOfCopy(gen.B, loc, unownedValue, dest, isInit);
       gen.B.emitStrongReleaseAndFold(loc, value);
       return;
     }
+    else {
+      gen.B.createStoreUnowned(loc, value, dest, isInit);
 
-    auto unownedValue =
-      gen.B.createRefToUnowned(loc, value, storageType.getObjectType());
-    gen.B.createUnownedRetain(loc, unownedValue, Atomicity::Atomic);
-    emitUnloweredStoreOfCopy(gen.B, loc, unownedValue, dest, isInit);
-    gen.B.emitStrongReleaseAndFold(loc, value);
-    return;
+      // store_unowned doesn't take ownership of the input, so cancel it out.
+      gen.B.emitReleaseValueOperation(loc, value);
+      return;
+    }
   }
 
   // For @unowned(unsafe) types, we need to enter the unmanaged box and

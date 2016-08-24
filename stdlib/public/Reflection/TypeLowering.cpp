@@ -1158,16 +1158,14 @@ public:
 
       // Look through optionals.
       if (SubKind == RecordKind::SinglePayloadEnum) {
-
-        if (Kind == ReferenceKind::Weak) {
-          auto *TI = TC.getTypeInfo(RecordTI->getFields()[0].TR);
-          return rebuildStorageTypeInfo(TI, Kind);
-        }
+        auto *TI = TC.getTypeInfo(RecordTI->getFields()[0].TR);
+        return rebuildStorageTypeInfo(TI, Kind);
+      }
 
       // Class existentials are represented as record types.
       // Destructure the existential and replace the "object"
       // field with the right reference kind.
-      } else if (SubKind == RecordKind::ClassExistential) {
+      else if (SubKind == RecordKind::ClassExistential) {
         std::vector<FieldInfo> Fields;
         for (auto &Field : RecordTI->getFields()) {
           if (Field.Name == "object") {

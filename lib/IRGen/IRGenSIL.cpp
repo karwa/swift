@@ -3367,18 +3367,26 @@ void IRGenSILFunction::visitStrongReleaseInst(swift::StrongReleaseInst *i) {
 /// info for the underlying reference type.
 static const ReferenceTypeInfo &getReferentTypeInfo(IRGenFunction &IGF,
                                                     SILType silType) {
+
   auto type = silType.castTo<ReferenceStorageType>().getReferentType();
-  return cast<ReferenceTypeInfo>(IGF.getTypeInfoForLowered(type));
+  if(auto underlyingType = type.getPointer()->getOptionalObjectType()) {
+    return cast<ReferenceTypeInfo>(IGF.IGM.getTypeInfo(IGF.IGM.getLoweredType(underlyingType)));
+  }
+  else {
+    return cast<ReferenceTypeInfo>(IGF.getTypeInfoForLowered(type));
+  }
 }
 
 void IRGenSILFunction::
 visitStrongRetainUnownedInst(swift::StrongRetainUnownedInst *i) {
+  llvm::errs() << "STRONG RETAINED UNOWNED INST \n";
   Explosion lowered = getLoweredExplosion(i->getOperand());
   auto &ti = getReferentTypeInfo(*this, i->getOperand()->getType());
   ti.strongRetainUnowned(*this, lowered);
 }
 
 void IRGenSILFunction::visitUnownedRetainInst(swift::UnownedRetainInst *i) {
+  llvm::errs() << "STRONG UNOWNED RETAIN INST \n";
   Explosion lowered = getLoweredExplosion(i->getOperand());
   auto &ti = getReferentTypeInfo(*this, i->getOperand()->getType());
   ti.unownedRetain(*this, lowered);
@@ -3391,6 +3399,7 @@ void IRGenSILFunction::visitUnownedReleaseInst(swift::UnownedReleaseInst *i) {
 }
 
 void IRGenSILFunction::visitLoadUnownedInst(swift::LoadUnownedInst *i) {
+  llvm::errs() << "LOAD UNOWNED INST \n";
   Address source = getLoweredAddress(i->getOperand());
   auto &ti = getReferentTypeInfo(*this, i->getOperand()->getType());
 
@@ -3405,6 +3414,7 @@ void IRGenSILFunction::visitLoadUnownedInst(swift::LoadUnownedInst *i) {
 }
 
 void IRGenSILFunction::visitStoreUnownedInst(swift::StoreUnownedInst *i) {
+  llvm::errs() << "STORE UNOWNED INST \n";
   Explosion source = getLoweredExplosion(i->getSrc());
   Address dest = getLoweredAddress(i->getDest());
 

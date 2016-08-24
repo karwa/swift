@@ -284,6 +284,9 @@ namespace {
         return ctx.TheUnknownObjectType->
                  usesNativeReferenceCounting(ResilienceExpansion::Maximal);
       }
+      else if(type->getAnyOptionalObjectType()) {
+        return hasNativeReferenceCounting(type->getOptionalObjectType()->getCanonicalType());
+      }
 
       // FIXME: resilience
       return type->usesNativeReferenceCounting(ResilienceExpansion::Maximal);
@@ -292,8 +295,10 @@ namespace {
     RetTy visitUnownedStorageType(CanUnownedStorageType type) {
       // FIXME: avoid this duplication of the behavior of isLoadable.
       if (hasNativeReferenceCounting(type.getReferentType())) {
+        llvm::errs() << "-=-=-=-=-= VISITING LOADABLE \n";
         return asImpl().visitLoadableUnownedStorageType(type);
       } else {
+        llvm::errs() << "-=-=-=-=-= VISITING AS UN LOADABLE \n";
         return asImpl().visitAddressOnlyUnownedStorageType(type);
       }
     }
@@ -1070,14 +1075,29 @@ namespace {
     /// @unowned is basically like a reference type lowering except
     /// it manipulates unowned reference counts instead of strong.
     const TypeLowering *visitUnownedStorageType(CanUnownedStorageType type) {
-      // Lower 'Self' as if it were the base type.
-      if (auto dynamicSelfType
-            = dyn_cast<DynamicSelfType>(type.getReferentType())) {
-        auto unownedBaseType = CanUnownedStorageType::get(
-                                                dynamicSelfType.getSelfType());
+      OptionalTypeKind OTK;
+      auto objectType = type.getReferentType().getAnyOptionalObjectType(OTK);
+      if (!objectType)
+        objectType = type.getReferentType();
 
-        return LowerType(TC, unownedBaseType, Sig, Expansion, Dependent)
-          .visit(unownedBaseType);
+      // Lower 'Self' as if it were the base type.
+      if (auto dynamicSelfType = dyn_cast<DynamicSelfType>(objectType)) {
+        if (OTK != OptionalTypeKind::OTK_None) {
+
+			auto optBaseType = OptionalType::get(OTK, dynamicSelfType.getSelfType())
+			->getCanonicalType();
+			auto unownedBaseType = CanUnownedStorageType::get(optBaseType);
+
+			return LowerType(TC, unownedBaseType, Sig, Expansion, Dependent)
+			.visit(unownedBaseType);
+        }
+		else {
+			auto unownedBaseType = CanUnownedStorageType::get(
+													dynamicSelfType.getSelfType());
+
+			return LowerType(TC, unownedBaseType, Sig, Expansion, Dependent)
+			  .visit(unownedBaseType);
+		}
       }
 
       return this->TypeClassifierBase::visitUnownedStorageType(type);

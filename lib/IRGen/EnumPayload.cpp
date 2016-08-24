@@ -243,6 +243,10 @@ EnumPayload EnumPayload::fromExplosion(IRGenModule &IGM,
   
   schema.forEachType(IGM, [&](llvm::Type *type) {
     auto next = in.claimNext();
+    llvm::errs() << "dumping explosion type \n";
+    next->getType()->dump();
+    type->dump();
+
     assert(next->getType() == type && "explosion doesn't match payload schema");
     result.PayloadValues.push_back(next);
   });

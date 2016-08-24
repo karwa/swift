@@ -387,6 +387,11 @@ TypeConverter::createUnmanagedStorageType(llvm::Type *valueType) {
                                         IGM.getPointerAlignment());
 }
 
+llvm::Type *getOptionalIntType(llvm::Type *valueType, Size size) {
+  return llvm::IntegerType::get(valueType->getContext(),
+                                size.getValueInBits());
+}
+
 namespace {
   /// A type implementation for an [unowned] reference to an object
   /// with a known-Swift reference count.
@@ -495,8 +500,7 @@ namespace {
     }
 
     llvm::Type *getOptionalIntType() const {
-      return llvm::IntegerType::get(ValueType->getContext(),
-                                    getFixedSize().getValueInBits());
+      return ::getOptionalIntType(ValueType, getFixedSize());
     }
 
     void weakLoadStrong(IRGenFunction &IGF, Address addr,
@@ -723,8 +727,7 @@ namespace {
     }
                                 
     llvm::Type *getOptionalIntType() const {
-      return llvm::IntegerType::get(ValueType->getContext(),
-                                    getFixedSize().getValueInBits());
+      return ::getOptionalIntType(ValueType, getFixedSize());
     }
 
     void weakLoadStrong(IRGenFunction &IGF, Address addr,
@@ -1138,7 +1141,7 @@ void IRGenFunction::emitNativeSetDeallocating(llvm::Value *value) {
 
 void IRGenFunction::emitNativeUnownedInit(llvm::Value *value,
                                           Address dest) {
-  value = Builder.CreateBitCast(value, IGM.RefCountedPtrTy);
+  value = Builder.CreateIntToPtr(value, IGM.RefCountedPtrTy);
   dest = Builder.CreateStructGEP(dest, 0, Size(0));
   Builder.CreateStore(value, dest);
   emitNativeUnownedRetain(value);
@@ -1146,7 +1149,11 @@ void IRGenFunction::emitNativeUnownedInit(llvm::Value *value,
 
 void IRGenFunction::emitNativeUnownedAssign(llvm::Value *value,
                                             Address dest) {
-  value = Builder.CreateBitCast(value, IGM.RefCountedPtrTy);
+  llvm::errs() << "=>=>=>=>=>=>= EMIT NATIVE UNOWNED ASSIGN \n";
+  value->dump();
+  value = Builder.CreateIntToPtr(value, IGM.RefCountedPtrTy);
+  value->dump();
+
   dest = Builder.CreateStructGEP(dest, 0, Size(0));
   auto oldValue = Builder.CreateLoad(dest);
   Builder.CreateStore(value, dest);
@@ -1157,8 +1164,13 @@ void IRGenFunction::emitNativeUnownedAssign(llvm::Value *value,
 llvm::Value *IRGenFunction::emitNativeUnownedLoadStrong(Address src,
                                                         llvm::Type *type) {
   src = Builder.CreateStructGEP(src, 0, Size(0));
+  llvm::errs() << "=>=>=>=>=>=>= EMIT NATIVE UNOWNED LOAD STRONG \n";
+  src->dump();
   llvm::Value *value = Builder.CreateLoad(src);
-  value = Builder.CreateBitCast(value, type);
+  value->dump();
+
+  llvm::Type *optionalIntType = ::getOptionalIntType(type, IGM.getPointerSize());
+  value = Builder.CreatePtrToInt(value, optionalIntType);
   emitNativeStrongRetainUnowned(value);
   return value;
 }
@@ -1166,8 +1178,13 @@ llvm::Value *IRGenFunction::emitNativeUnownedLoadStrong(Address src,
 llvm::Value *IRGenFunction::emitNativeUnownedTakeStrong(Address src,
                                                         llvm::Type *type) {
   src = Builder.CreateStructGEP(src, 0, Size(0));
+  llvm::errs() << "=>=>=>=>=>=>= EMIT NATIVE UNOWNED TAKE STRONG \n";
+  src->dump();
   llvm::Value *value = Builder.CreateLoad(src);
-  value = Builder.CreateBitCast(value, type);
+  value->dump();
+
+  llvm::Type *optionalIntType = ::getOptionalIntType(type, IGM.getPointerSize());
+  value = Builder.CreatePtrToInt(value, optionalIntType);
   emitNativeStrongRetainAndUnownedRelease(value);
   return value;
 }

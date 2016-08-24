@@ -1684,18 +1684,21 @@ void TypeChecker::checkOwnershipAttr(VarDecl *var, OwnershipAttr *attr) {
 
   // A weak variable must have type R? or R! for some ownership-capable type R.
   Type underlyingType = type;
+
+  // Unwrap optionals of reference-types.
+  if (Type objType = type->getAnyOptionalObjectType())
+    underlyingType = objType;
+
   if (ownershipKind == Ownership::Weak) {
+    // Due to nature of weak references, members must be 'var' and optional.
     if (var->isLet()) {
       diagnose(var->getStartLoc(), diag::invalid_weak_let);
       attr->setInvalid();
       return;
     }
 
-    if (Type objType = type->getAnyOptionalObjectType())
-      underlyingType = objType;
-    else if (type->allowsOwnership()) {
-      // Use this special diagnostic if it's actually a reference type but just
-      // isn't Optional.
+    if (!type->getAnyOptionalObjectType()) {
+
       if (var->getAttrs().hasAttribute<IBOutletAttr>()) {
         // Let @IBOutlet complain about this; it's more specific.
         attr->setInvalid();
@@ -1707,13 +1710,7 @@ void TypeChecker::checkOwnershipAttr(VarDecl *var, OwnershipAttr *attr) {
       attr->setInvalid();
 
       return;
-    } else {
-      // This is also an error, but the code below will diagnose it.
     }
-  } else if (ownershipKind == Ownership::Strong) {
-    // We allow strong on optional-qualified reference types.
-    if (Type objType = type->getAnyOptionalObjectType())
-      underlyingType = objType;
   }
 
   if (!underlyingType->allowsOwnership()) {
