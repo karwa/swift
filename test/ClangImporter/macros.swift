@@ -109,6 +109,20 @@ func testBitwiseOps() {
   _ = (BIT_SHIFT_1 | BIT_SHIFT_2) as CInt
   _ = BIT_SHIFT_3 as CLongLong
   _ = BIT_SHIFT_4 as CUnsignedInt
+
+  var attributes = 0 as CInt
+  attributes |= ATTR_BOLD
+  attributes |= ATTR_ITALIC
+  attributes |= ATTR_UNDERLINE
+}
+
+func testAddSubtract() {
+  _ = ADD_ZERO
+  _ = ADD_ONE
+  _ = ADD_TWO
+
+  _ = SUB_ONE
+  _ = SUB_ZERO
 }
 
 func testRecursion() {

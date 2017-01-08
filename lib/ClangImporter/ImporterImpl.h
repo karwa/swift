@@ -613,6 +613,12 @@ public:
 
   ClangModuleUnit *getClangModuleForMacro(const clang::MacroInfo *MI);
 
+  /// Returns the value and imported type of the imported constant
+  /// represented by \p MI, or \c None if \p MI has not been imported
+  /// or is not an integer constant.
+  Optional<std::pair<llvm::APSInt, Type>>
+  getIntegerValueForMacro(const clang::MacroInfo *MI);
+
   /// Whether NSUInteger can be imported as Int in certain contexts. If false,
   /// should always be imported as UInt.
   static bool shouldAllowNSUIntegerAsInt(bool isFromSystemModule,

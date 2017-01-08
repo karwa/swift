@@ -59,5 +59,17 @@
 #define BIT_SHIFT_3 (3LL << 3)
 #define BIT_SHIFT_4 (1U << 1)
 
+#define STARTPOS_ATTRS 8
+#define ATTR_BOLD      (1 << STARTPOS_ATTRS)
+#define ATTR_ITALIC    (2 << STARTPOS_ATTRS)
+#define ATTR_UNDERLINE (4 << STARTPOS_ATTRS)
+
+#define ADD_ZERO (0 + 0)
+#define ADD_ONE  (ADD_ZERO + 1)
+#define ADD_TWO  (ADD_ONE + ADD_ONE)
+
+#define SUB_ONE  (ADD_TWO - 1)
+#define SUB_ZERO (SUB_ONE - SUB_ONE)
+
 #define RECURSION RECURSION
 #define REF_TO_RECURSION RECURSION
