@@ -15,7 +15,7 @@
 #if os(OSX) || os(iOS) || os(tvOS) || os(watchOS)
 
 /// Enumeration describing POSIX error codes.
-@objc public enum POSIXErrorCode : Int32 {
+@objc public enum POSIXErrorCode : Int32, Error {
   /// Operation not permitted.
   case EPERM           = 1
   /// No such file or directory.
@@ -267,7 +267,7 @@
 #elseif os(Linux) || os(Android)
 
 /// Enumeration describing POSIX error codes.
-public enum POSIXErrorCode : Int32 {
+public enum POSIXErrorCode : Int32, Error {
   /// Operation not permitted.
   case EPERM           = 1
   /// No such file or directory.
