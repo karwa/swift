@@ -97,3 +97,8 @@ public struct MyStruct {
   }
   // CHECK-NEXT: }
 }
+
+// CHECK-LABEL: sealed public protocol MySealedProtocol {
+sealed public protocol MySealedProtocol {
+  // CHECK-NEXT: }
+}

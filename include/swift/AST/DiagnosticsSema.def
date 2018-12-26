@@ -1636,6 +1636,12 @@ NOTE(note_explicitly_state_conditional_conformance_same,none,
 NOTE(note_explicitly_state_conditional_conformance_noneditor,none,
      "did you mean to explicitly state the conformance like '%0where ...'?",
      (StringRef))
+ERROR(protocol_cross_module_conformance_sealed,none,
+      "cannot conform to 'sealed' protocol %0 outside of its defining module",
+      (Type))
+ERROR(protocol_cross_module_conformance_sealed_indirect,none,
+      "type %0 cannot conform to protocol %1. Only types which conform to "
+      "'sealed' protocol %2 are eligible", (Type, Type, Type))
 ERROR(protocol_has_missing_requirements,none,
       "type %0 cannot conform to protocol %1 because it has requirements that "
       "cannot be satisfied", (Type, Type))

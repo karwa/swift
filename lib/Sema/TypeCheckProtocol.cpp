@@ -1672,6 +1672,30 @@ checkIndividualConformance(NormalProtocolConformance *conformance,
     return conformance;
   }
 
+  // If the protocol is sealed, new conformances may only be introduced by
+  // the declaring module.
+  if (Proto->getAttrs().hasAttribute<SealedAttr>() &&
+      Proto->getModuleContext() != DC->getParentModule()) {
+    // If this conformance was implied by a refinement, use
+    // the explicit protocol's name for diagnostics.
+    if (conformance->getSourceKind() == ConformanceEntryKind::Implied) {
+      auto implConf = conformance->getImplyingConformance();
+      while (implConf->getSourceKind() == ConformanceEntryKind::Implied) {
+        implConf = implConf->getImplyingConformance();
+      }
+      TC.diagnose(ComplainLoc,
+                  diag::protocol_cross_module_conformance_sealed_indirect,
+                  T, implConf->getProtocol()->getDeclaredType(),
+                  ProtoType);      
+    } else {
+      TC.diagnose(ComplainLoc,
+                  diag::protocol_cross_module_conformance_sealed,
+                  ProtoType);
+    }
+    conformance->setInvalid();
+    return conformance;
+  }
+
   // If the protocol requires a class, non-classes are a non-starter.
   if (Proto->requiresClass() && !canT->getClassOrBoundGenericClass()) {
     TC.diagnose(ComplainLoc, diag::non_class_cannot_conform_to_class_protocol,
