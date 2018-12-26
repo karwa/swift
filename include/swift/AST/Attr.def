@@ -390,6 +390,10 @@ DECL_ATTR(_private, PrivateImport,
   OnImport |
   UserInaccessible |
   NotSerialized, 82)
+CONTEXTUAL_SIMPLE_DECL_ATTR(sealed, Sealed,
+  OnProtocol |
+  DeclModifier,
+  83)
 
 #undef TYPE_ATTR
 #undef DECL_ATTR_ALIAS

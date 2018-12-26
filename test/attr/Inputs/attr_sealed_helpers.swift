@@ -1,0 +1,1 @@
+sealed public protocol SealedExternalProtocol {}

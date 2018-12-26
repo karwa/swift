@@ -2284,6 +2284,8 @@ ERROR(superclass_of_open_not_open,none,
   "superclass %0 of open class must be open", (Type))
 ERROR(inheritance_from_final_class,none,
       "inheritance from a final class %0", (Identifier))
+ERROR(inheritance_sealed_protocol,none,
+      "cannot inherit from 'sealed' protocol %0 outside of its defining module", (DeclName))
 ERROR(inheritance_from_unspecialized_objc_generic_class,none,
       "inheritance from a generic Objective-C class %0 must bind "
       "type parameters of %0 to specific concrete types", (Identifier))
@@ -2504,6 +2506,12 @@ ERROR(escaping_non_function_parameter,none,
 
 NOTE(escaping_optional_type_argument, none,
      "closure is already escaping in optional type argument", ())
+
+// sealed.
+ERROR(attr_sealed_cannot_conform_across_modules,none,
+      "cannot conform to 'sealed' protocol %0 outside of its defining module", (DeclName))
+ERROR(attr_sealed_refinement_must_be_sealed,none,
+      "public refinements of 'sealed' protocols must also be declared 'sealed'", ())
 
 // NSManaged attribute
 ERROR(attr_NSManaged_not_instance_member,none,

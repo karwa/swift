@@ -1200,6 +1200,7 @@ namespace  {
     UNINTERESTING_ATTR(RawDocComment)
     UNINTERESTING_ATTR(Required)
     UNINTERESTING_ATTR(Convenience)
+    UNINTERESTING_ATTR(Sealed)
     UNINTERESTING_ATTR(Semantics)
     UNINTERESTING_ATTR(SetterAccess)
     UNINTERESTING_ATTR(HasStorage)

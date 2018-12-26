@@ -2800,6 +2800,28 @@ public:
       }
     }
 
+    for (auto *parent : PD->getInheritedProtocols()) {
+      if (auto parentAttr = parent->getAttrs().getAttribute<SealedAttr>()) {
+        // Refinements of sealed protocols are only allowed within
+        // the parent's defining module.
+        if (PD->getModuleContext() != parent->getModuleContext()) {
+          PD->setInvalid();
+          TC.diagnose(PD, diag::inheritance_sealed_protocol, parent->getName());
+          break;
+        }
+        // Refinements of sealed protocols are implicitly also sealed.
+        // Emit an error if the refinement is public.
+        if (!PD->getAttrs().hasAttribute<SealedAttr>()) {
+          PD->getAttrs().add(new (TC.Context) SealedAttr(/*IsImplicit=*/true));
+          if (PD->getFormalAccess() == AccessLevel::Public)
+            TC.diagnose(PD, diag::attr_sealed_refinement_must_be_sealed)
+              .fixItInsert(PD->getDecl()->getSourceRangeIncludingAttrs().Start,
+                           "sealed ");
+          break;
+        }
+      }
+    }
+
     // Check the members.
     for (auto Member : PD->getMembers())
       visit(Member);

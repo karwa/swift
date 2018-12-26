@@ -1672,6 +1672,15 @@ checkIndividualConformance(NormalProtocolConformance *conformance,
     return conformance;
   }
 
+  // If the protocol is sealed, the conformance must be in the same module.
+  if (Proto->getAttrs().hasAttribute<SealedAttr>() &&
+      Proto->getModuleContext() != DC->getParentModule()) {
+    TC.diagnose(ComplainLoc, diag::attr_sealed_cannot_conform_across_modules,
+                Proto->getName());
+    conformance->setInvalid();
+    return conformance;
+  }
+
   // If the protocol requires a class, non-classes are a non-starter.
   if (Proto->requiresClass() && !canT->getClassOrBoundGenericClass()) {
     TC.diagnose(ComplainLoc, diag::non_class_cannot_conform_to_class_protocol,
