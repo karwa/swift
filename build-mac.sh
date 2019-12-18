@@ -15,6 +15,7 @@ export sourcedir=$PWD/..
   " \
   --build-stdlib-deployment-targets "wasi-wasm32" \
   --build-swift-dynamic-sdk-overlay false \
+  --build-swift-dynamic-stdlib false \
   --build-swift-static-sdk-overlay false \
   --build-swift-static-stdlib \
   --llvm-targets-to-build "X86;WebAssembly" \
