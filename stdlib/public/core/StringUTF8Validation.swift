@@ -144,7 +144,7 @@ internal func validateUTF8(_ buf: UnsafeBufferPointer<UInt8>) -> UTF8ValidationR
              && guaranteeContinuation(&iter)
       if success { lastValidIndex &+= 4 }
     default:
-      fatalError()
+      Builtin.unreachable()
     }
     if !success {
       return .error(toBeReplaced: findInvalidRange(from: lastValidIndex))
