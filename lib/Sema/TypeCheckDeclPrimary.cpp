@@ -2672,12 +2672,26 @@ public:
                     kind.getSelector());
     }
 
-    // We don't support protocols outside the top level of a file.
-    if (isa<ProtocolDecl>(NTD) &&
-        !NTD->getParent()->isModuleScopeContext()) {
-      NTD->diagnose(diag::unsupported_nested_protocol, NTD);
-      NTD->setInvalid();
-      return;
+    if (isa<ProtocolDecl>(NTD)) {
+      if (NTD->getASTContext().LangOpts.hasFeature(Feature::NestedProtocols)) {
+        // Protocols may only be nested in non-generic contexts.
+        if (NTD->getParent()->isGenericContext()) {
+          if (isa<ProtocolDecl>(NTD->getParent())) {
+            NTD->diagnose(diag::unsupported_nested_protocol_in_protocol, NTD);
+          } else {
+            NTD->diagnose(diag::unsupported_nested_protocol_in_generic_context, NTD);
+          }
+          NTD->setInvalid();
+          return;
+        }
+      } else {
+        // We don't support protocols outside the top level of a file.
+        if (!NTD->getParent()->isModuleScopeContext()) {
+          NTD->diagnose(diag::unsupported_nested_protocol, NTD);
+          NTD->setInvalid();
+          return;
+        }
+      }
     }
 
     // We don't support nested types in protocols.

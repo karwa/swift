@@ -227,6 +227,9 @@ EXPERIMENTAL_FEATURE(PlaygroundExtendedCallbacks, true)
 /// Enable the `@_rawLayout` attribute.
 EXPERIMENTAL_FEATURE(RawLayout, true)
 
+/// Enable protocols to be nested in non-generic contexts.
+EXPERIMENTAL_FEATURE(NestedProtocols, false)
+
 #undef EXPERIMENTAL_FEATURE_EXCLUDED_FROM_MODULE_INTERFACE
 #undef EXPERIMENTAL_FEATURE
 #undef UPCOMING_FEATURE
