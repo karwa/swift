@@ -3425,6 +3425,14 @@ static bool usesFeatureParameterPacks(Decl *decl) {
   return false;
 }
 
+static bool usesFeatureNestedProtocols(Decl *decl) {
+    // TODO: How do I test this?
+    if (auto *protocolDecl = dyn_cast<ProtocolDecl>(decl)) {
+        return decl->getDeclContext()->getParent()->isTypeContext();
+    }
+    return false;
+}
+
 /// Suppress the printing of a particular feature.
 static void suppressingFeature(PrintOptions &options, Feature feature,
                                llvm::function_ref<void()> action) {
