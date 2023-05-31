@@ -1,0 +1,261 @@
+// RUN: %target-typecheck-verify-swift -parse-as-library -enable-experimental-feature NestedProtocols
+
+// Protocols can be nested inside non-generic types.
+
+protocol Delegate {}
+
+enum Table {
+  protocol Delegate {}
+}
+
+enum Button {
+  protocol Delegate {}
+}
+
+struct PlainDelegateConformer: Delegate {}
+struct TableDelegateConformer: Table.Delegate {}
+struct ButtonDelegateConformer: Button.Delegate {}
+
+func testDifferent() {
+  let plain = PlainDelegateConformer()
+  if plain is Delegate { print("ok (1)") } // expected-warning {{'is' test is always true}}
+  if plain is Table.Delegate { print("bad (2)") }
+  if plain is Button.Delegate { print("bad (3)") }
+
+  let tableDel = TableDelegateConformer()
+  if tableDel is Delegate { print("bad (4)") }
+  if tableDel is Table.Delegate { print("ok (5)") } // expected-warning {{'is' test is always true}}
+  if tableDel is Button.Delegate { print("bad (6)") }
+
+  let buttonDel = ButtonDelegateConformer()
+  if buttonDel is Delegate { print("bad (7)") }
+  if buttonDel is Table.Delegate { print("bad (8)") }
+  if buttonDel is Button.Delegate { print("ok (9)") } // expected-warning {{'is' test is always true}}
+}
+
+enum OuterEnum {
+  protocol C {}
+  case C(C) 
+  // expected-error@-1{{invalid redeclaration of 'C'}}
+  // expected-note@-3{{'C' previously declared here}}
+}
+
+class OuterClass {
+  protocol InnerProtocol : OuterClass { }
+}
+
+// Deeply nested.
+
+enum Level0 {
+  struct Level1 {
+    class Level2 {
+      actor Level3 {
+        struct Level4 {
+          class Level5 {
+            protocol DeeplyNested {
+              func someRequirement()
+            }
+            func lookupTest(_ input: some DeeplyNested) {}
+          }
+          func lookupTest(_ input: some Level5.DeeplyNested) {}
+        }
+        func lookupTest(_ input: some Level4.Level5.DeeplyNested) {}
+      }
+    }
+  }
+}
+
+func useDeeplyNested(_ input: some Level0.Level1.Level2.Level3.Level4.Level5.DeeplyNested) {
+  input.someRequirement()
+}
+
+// Add a nested protocol in an extension.
+
+extension Level0.Level1.Level2 {
+  protocol ModeratelyNested {
+    associatedtype ReturnValue
+    func anotherRequirement() -> ReturnValue
+  }
+
+  func lookupTest(_: some ModeratelyNested) { }
+}
+
+func useModeratelyNested<Input>(
+  _ input: Input
+) -> Input.ReturnValue where Input: Level0.Level1.Level2.ModeratelyNested {
+  input.anotherRequirement()
+}
+
+struct ModeratelyNestedConformer: Level0.Level1.Level2.ModeratelyNested {
+  func anotherRequirement() -> Int {
+    99
+  }
+}
+
+let _umn: Int = useModeratelyNested(ModeratelyNestedConformer())
+
+// Extend a nested protocol.
+
+extension Level0.Level1.Level2.ModeratelyNested {
+  func extensionMethod() -> ReturnValue {
+    anotherRequirement()
+  }
+}
+
+extension Level0.Level1.Level2.ModeratelyNested where ReturnValue == Int {
+  func extensionMethod() -> Int {
+    anotherRequirement() + 1
+  }
+}
+
+// Protocols may be nested inside non-generic functions.
+
+func someFunction_0() {
+  protocol Yes {}
+  struct Foo: Yes {}
+  struct Bar: Yes {}
+}
+
+func someFunction_1() {
+
+  struct HowAboutThis {
+    protocol AlsoYes {
+      associatedtype SomeType
+      func doSomething() -> SomeType
+    }
+  }
+
+  struct Conforms0: HowAboutThis.AlsoYes {
+    typealias SomeType = Int
+    func doSomething() -> SomeType { -99 }
+  }
+
+  struct Conforms1: HowAboutThis.AlsoYes {
+    typealias SomeType = String
+    func doSomething() -> SomeType { "works" }
+  }
+
+  func usesNested<T: HowAboutThis.AlsoYes>(_ input: T) -> T.SomeType {
+    input.doSomething()
+  }
+
+  let _: Int = usesNested(Conforms0())
+  let _: String = usesNested(Conforms1())
+}
+
+// Protocols cannot be nested in generic types or other protocols.
+
+struct OuterGeneric<D> {
+  protocol InnerProtocol { // expected-error{{protocol 'InnerProtocol' cannot be nested inside a generic context}}
+    associatedtype Rooster
+    func flip(_ r: Rooster)
+    func flop(_ t: D) // expected-error{{cannot find type 'D' in scope}}
+  }
+}
+
+class OuterGenericClass<T> {
+  protocol InnerProtocol { // expected-error{{protocol 'InnerProtocol' cannot be nested inside a generic context}}
+    associatedtype Rooster
+    func flip(_ r: Rooster)
+    func flop(_ t: T) // expected-error{{cannot find type 'T' in scope}}
+  }
+}
+
+protocol OuterProtocol {
+  associatedtype Hen
+  protocol InnerProtocol { // expected-error{{protocol 'InnerProtocol' cannot be nested inside another protocol}}
+    associatedtype Rooster
+    func flip(_ r: Rooster)
+    func flop(_ h: Hen) // expected-error{{cannot find type 'Hen' in scope}}
+  }
+}
+
+struct ConformsToOuterProtocol : OuterProtocol {
+  typealias Hen = Int
+
+  func f() { let _ = InnerProtocol.self } // expected-error {{use of protocol 'OuterProtocol.InnerProtocol' as a type must be written 'any OuterProtocol.InnerProtocol'}}
+}
+
+// 'InnerProtocol' does not inherit the generic parameters of
+// 'OtherGenericClass', so the occurrence of 'OtherGenericClass'
+// in 'InnerProtocol' is not "in context" with implicitly
+// inferred generic arguments <T, U>.
+class OtherGenericClass<T, U> { // expected-note {{generic type 'OtherGenericClass' declared here}}
+  protocol InnerProtocol : OtherGenericClass { }
+  // expected-error@-1{{protocol 'InnerProtocol' cannot be nested inside a generic context}}
+  // expected-error@-2{{reference to generic type 'OtherGenericClass' requires arguments in <...>}}
+}
+
+protocol SelfDotTest {
+  func f(_: Self.Class)
+  class Class {}
+  // expected-error@-1{{type 'Class' cannot be nested in protocol 'SelfDotTest'}}
+}
+
+struct Outer {
+  typealias E = NestedValidation.T
+  protocol NestedValidation {
+    typealias T = A.B
+    class A { // expected-error {{type 'A' cannot be nested in protocol 'NestedValidation'}}
+      typealias B = Int
+    }
+  }
+}
+
+struct OuterForUFI {
+  @usableFromInline
+  protocol Inner {
+    func req()
+  }
+}
+
+extension OuterForUFI.Inner {
+  public func extMethod() {} // The 'public' puts this in a special path.
+}
+
+func testLookup(_ x: OuterForUFI.Inner) {
+  x.req()
+  x.extMethod()
+}
+
+func testLookup<T: OuterForUFI.Inner>(_ x: T) {
+  x.req()
+  x.extMethod()
+}
+
+// Protocols cannot be nested inside of generic functions.
+
+func invalidProtocolInGeneric<T>(_: T) {
+  protocol Test {} // expected-error{{protocol 'Test' cannot be nested inside a generic context}}
+}
+
+struct NestedInGenericMethod<T> {
+  func someMethod() {
+    protocol AnotherTest {} // expected-error{{protocol 'AnotherTest' cannot be nested inside a generic context}}
+  }
+}
+
+// Types cannot be nested inside of protocols.
+
+protocol Racoon {
+  associatedtype Stripes
+  class Claw<T> { // expected-error{{type 'Claw' cannot be nested in protocol 'Racoon'}}
+    func mangle(_ s: Stripes) {}
+    // expected-error@-1 {{cannot find type 'Stripes' in scope}}
+  }
+  struct Fang<T> { // expected-error{{type 'Fang' cannot be nested in protocol 'Racoon'}}
+    func gnaw(_ s: Stripes) {}
+    // expected-error@-1 {{cannot find type 'Stripes' in scope}}
+  }
+  enum Fur { // expected-error{{type 'Fur' cannot be nested in protocol 'Racoon'}}
+    case Stripes
+  }
+}
+
+enum SillyRawEnum : SillyProtocol.InnerClass {} // expected-error {{an enum with no cases cannot declare a raw type}}
+// expected-error@-1 {{reference to generic type 'SillyProtocol.InnerClass' requires arguments in <...>}}
+
+protocol SillyProtocol {
+  class InnerClass<T> {} // expected-error {{type 'InnerClass' cannot be nested in protocol 'SillyProtocol'}}
+  // expected-note@-1 {{generic type 'InnerClass' declared here}}
+}
