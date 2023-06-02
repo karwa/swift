@@ -2523,7 +2523,7 @@ public:
       if (NTD->getASTContext().LangOpts.hasFeature(Feature::NestedProtocols)) {
         // Protocols may only be nested in non-generic contexts.
         if (NTD->getParent()->isGenericContext()) {
-          if (isa<ProtocolDecl>(NTD->getParent())) {
+          if (NTD->getParent()->getSelfProtocolDecl()) {
             NTD->diagnose(diag::unsupported_nested_protocol_in_protocol, NTD->getName());
           } else {
             NTD->diagnose(diag::unsupported_nested_protocol_in_generic_context, NTD->getName());

@@ -172,8 +172,24 @@ protocol OuterProtocol {
 
 struct ConformsToOuterProtocol : OuterProtocol {
   typealias Hen = Int
-
   func f() { let _ = InnerProtocol.self } // expected-error {{use of protocol 'OuterProtocol.InnerProtocol' as a type must be written 'any OuterProtocol.InnerProtocol'}}
+}
+
+extension OuterProtocol {
+  protocol DefinedInExtension {} // expected-error{{protocol 'DefinedInExtension' cannot be nested inside another protocol}}
+}
+
+extension OuterProtocol {
+  func f() {
+    protocol Invalid_0 {} // expected-error{{protocol 'Invalid_0' cannot be nested inside a generic context}}
+
+    struct SomeType { // expected-error{{type 'SomeType' cannot be nested in generic function 'f()'}}
+      protocol Invalid_1 {} // expected-error{{protocol 'Invalid_1' cannot be nested inside a generic context}}
+    }
+  }
+  func g<T>(_: T) {
+    protocol Invalid_2 {} // expected-error{{protocol 'Invalid_2' cannot be nested inside a generic context}}
+  }
 }
 
 // 'InnerProtocol' does not inherit the generic parameters of
