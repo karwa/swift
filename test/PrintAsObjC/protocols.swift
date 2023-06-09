@@ -14,6 +14,11 @@
 // RUN: %FileCheck --check-prefix=NEGATIVE %s < %t/protocols.h
 // RUN: %check-in-clang %t/protocols.h
 
+// RUN: %target-swift-frontend(mock-sdk: %clang-importer-sdk-nosource) -I %t -emit-module -module-name protocols_nested -o %t %s -disable-objc-attr-requires-foundation-module -enable-experimental-feature NestedProtocols
+// RUN: %target-swift-frontend(mock-sdk: %clang-importer-sdk-nosource) -I %t -parse-as-library %t/protocols_nested.swiftmodule -typecheck -emit-objc-header-path %t/protocols_nested.h -import-objc-header %S/../Inputs/empty.h -disable-objc-attr-requires-foundation-module -enable-experimental-feature NestedProtocols
+// RUN: %FileCheck --check-prefix=NESTED %s < %t/protocols_nested.h
+// RUN: %check-in-clang %t/protocols_nested.h
+
 // REQUIRES: objc_interop
 
 import Foundation
@@ -136,6 +141,28 @@ extension NSString : A, ZZZ {}
 
   @objc optional func f()
 }
+
+#if $NestedProtocols
+  // NESTED-LABEL: @interface ParentClass
+  // NESTED-NEXT: @end
+  @objc class ParentClass {
+
+    // NESTED-LABEL: @protocol Nested
+    // NESTED-NEXT: @end
+    @objc protocol Nested {}
+
+    // NESTED-LABEL: SWIFT_PROTOCOL_NAMED("Nested2")
+    // NESTED-NEXT: @protocol NestedInParent
+    // NESTED-NEXT: @end
+    @objc(NestedInParent) protocol Nested2 {}
+  }
+
+  extension ParentClass {
+    // NESTED-LABEL: @protocol NestedInExtensionOfParent
+    // NESTED-NEXT: @end
+    @objc protocol NestedInExtensionOfParent {}
+  }
+#endif
 
 // NEGATIVE-NOT: @protocol PrivateProto
 @objc private protocol PrivateProto {}
