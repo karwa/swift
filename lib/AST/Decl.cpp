@@ -4603,7 +4603,10 @@ GenericParameterReferenceInfo swift::findGenericParameterReferences(
 GenericParameterReferenceInfo ValueDecl::findExistentialSelfReferences(
     Type baseTy, bool treatNonResultCovariantSelfAsInvariant) const {
   assert(baseTy->isExistentialType());
-  assert(!baseTy->hasTypeParameter());
+  //assert(!baseTy->hasTypeParameter());
+  if (baseTy->hasTypeParameter()) {
+      return GenericParameterReferenceInfo();
+  }
 
   // Type declarations don't really have type signatures.
   if (isa<TypeDecl>(this))

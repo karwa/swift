@@ -2550,6 +2550,7 @@ public:
         NTD->diagnose(diag::unsupported_type_nested_in_protocol,
                       NTD->getName(), proto->getName());
       }
+      NTD->setInvalid();
     }
 
     // We don't support nested types in generic functions yet.
@@ -2569,6 +2570,9 @@ public:
 
   void visitEnumDecl(EnumDecl *ED) {
     checkUnsupportedNestedType(ED);
+    if (ED->isInvalid()) {
+      return;
+    }
 
     // Temporary restriction until we figure out pattern matching and
     // enum case construction with packs.
@@ -2651,6 +2655,9 @@ public:
 
   void visitStructDecl(StructDecl *SD) {
     checkUnsupportedNestedType(SD);
+    if (SD->isInvalid()) {
+      return;
+    }
 
     checkGenericParams(SD);
 
@@ -2843,6 +2850,9 @@ public:
 
   void visitClassDecl(ClassDecl *CD) {
     checkUnsupportedNestedType(CD);
+    if (CD->isInvalid()) {
+      return;
+    }
 
     // Force creation of the generic signature.
     (void) CD->getGenericSignature();
@@ -3022,6 +3032,9 @@ public:
 
   void visitProtocolDecl(ProtocolDecl *PD) {
     checkUnsupportedNestedType(PD);
+    if (PD->isInvalid()) {
+      return;
+    }
 
     // Check for circular inheritance within the protocol.
     (void) PD->hasCircularInheritedProtocols();

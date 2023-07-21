@@ -3426,10 +3426,6 @@ static bool usesFeatureParameterPacks(Decl *decl) {
 }
 
 static bool usesFeatureNestedProtocols(Decl *decl) {
-    // TODO: How do I test this?
-    if (auto *protocolDecl = dyn_cast<ProtocolDecl>(decl)) {
-        return decl->getDeclContext()->getParent()->isTypeContext();
-    }
     return false;
 }
 
