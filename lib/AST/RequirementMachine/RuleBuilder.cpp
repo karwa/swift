@@ -294,6 +294,16 @@ void RuleBuilder::addRequirement(const Requirement &req,
                       : Context.getMutableTermForType(
                           subjectType, proto));
 
+  if (req.refersToUnsupportedNestedType()) {
+    MutableTerm errorTerm;
+    SmallVector<Term, 1> result;
+    errorTerm.add(Symbol::forConcreteType(ErrorType::get(req.getSecondType())->getCanonicalType(), result, Context));
+    RequirementRules.emplace_back(
+        std::move(subjectTerm), std::move(errorTerm),
+        requirementID);
+    return;
+  }
+
   // Compute the right hand side.
   MutableTerm constraintTerm;
 

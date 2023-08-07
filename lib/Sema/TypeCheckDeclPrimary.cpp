@@ -2511,68 +2511,8 @@ public:
     }
   }
 
-  void checkUnsupportedNestedType(NominalTypeDecl *NTD) {
-    auto *DC = NTD->getDeclContext();
-    auto kind = DC->getFragileFunctionKind();
-    if (kind.kind != FragileFunctionKind::None) {
-      NTD->diagnose(diag::local_type_in_inlinable_function, NTD->getName(),
-                    kind.getSelector());
-    }
-
-    if (isa<ProtocolDecl>(NTD)) {
-      if (NTD->getASTContext().LangOpts.hasFeature(Feature::NestedProtocols)) {
-        // Protocols may only be nested in non-generic contexts.
-        if (NTD->getParent()->isGenericContext()) {
-          if (NTD->getParent()->getSelfProtocolDecl()) {
-            NTD->diagnose(diag::unsupported_nested_protocol_in_protocol, NTD->getName());
-          } else {
-            NTD->diagnose(diag::unsupported_nested_protocol_in_generic_context, NTD->getName());
-          }
-          NTD->setInvalid();
-          return;
-        }
-      } else {
-        // We don't support protocols outside the top level of a file.
-        if (!NTD->getParent()->isModuleScopeContext()) {
-          NTD->diagnose(diag::unsupported_nested_protocol, NTD->getName());
-          NTD->setInvalid();
-          return;
-        }
-      }
-    }
-
-    // We don't support nested types in protocols.
-    if (auto proto = DC->getSelfProtocolDecl()) {
-      if (DC->getExtendedProtocolDecl()) {
-        NTD->diagnose(diag::unsupported_type_nested_in_protocol_extension,
-                      NTD->getName(), proto->getName());
-      } else {
-        NTD->diagnose(diag::unsupported_type_nested_in_protocol,
-                      NTD->getName(), proto->getName());
-      }
-      NTD->setInvalid();
-    }
-
-    // We don't support nested types in generic functions yet.
-    if (NTD->isGenericContext()) {
-      if (DC->isLocalContext() && DC->isGenericContext()) {
-        // A local generic context is a generic function.
-        if (auto AFD = dyn_cast<AbstractFunctionDecl>(DC)) {
-          NTD->diagnose(diag::unsupported_type_nested_in_generic_function,
-                        NTD->getName(), AFD->getName());
-        } else {
-          NTD->diagnose(diag::unsupported_type_nested_in_generic_closure,
-                        NTD->getName());
-        }
-      }
-    }
-  }
-
   void visitEnumDecl(EnumDecl *ED) {
-    checkUnsupportedNestedType(ED);
-    if (ED->isInvalid()) {
-      return;
-    }
+    (void) ED->isUnsupportedNestedType();
 
     // Temporary restriction until we figure out pattern matching and
     // enum case construction with packs.
@@ -2654,10 +2594,7 @@ public:
   }
 
   void visitStructDecl(StructDecl *SD) {
-    checkUnsupportedNestedType(SD);
-    if (SD->isInvalid()) {
-      return;
-    }
+    (void) SD->isUnsupportedNestedType();
 
     checkGenericParams(SD);
 
@@ -2849,10 +2786,7 @@ public:
   }
 
   void visitClassDecl(ClassDecl *CD) {
-    checkUnsupportedNestedType(CD);
-    if (CD->isInvalid()) {
-      return;
-    }
+    (void) CD->isUnsupportedNestedType();
 
     // Force creation of the generic signature.
     (void) CD->getGenericSignature();
@@ -3031,10 +2965,7 @@ public:
   }
 
   void visitProtocolDecl(ProtocolDecl *PD) {
-    checkUnsupportedNestedType(PD);
-    if (PD->isInvalid()) {
-      return;
-    }
+    (void) PD->isUnsupportedNestedType();
 
     // Check for circular inheritance within the protocol.
     (void) PD->hasCircularInheritedProtocols();

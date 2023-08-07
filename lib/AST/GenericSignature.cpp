@@ -817,6 +817,32 @@ int swift::compareDependentTypes(Type type1, Type type2) {
   return 0;
 }
 
+bool Requirement::refersToUnsupportedNestedType() const {
+
+  switch (getKind()) {
+  case RequirementKind::SameShape:
+    // ???
+    return false;
+
+  case RequirementKind::Conformance:
+    // If the protocol is improperly nested,
+    // it may have generic parameters that we cannot handle.
+    return getProtocolDecl()->isUnsupportedNestedType();
+
+  case RequirementKind::Superclass:
+  case RequirementKind::SameType:
+    // If the superclass is improperly nested,
+    // it may have generic parameters that we cannot handle.
+    if (auto *NTD = getSecondType()->getAnyNominal()) {
+      return NTD->isUnsupportedNestedType();
+    }
+    return false;
+
+  case RequirementKind::Layout:
+    return false;
+  }
+}
+
 #pragma mark Generic signature verification
 
 void GenericSignature::verify() const {
@@ -837,6 +863,10 @@ void GenericSignature::verify(ArrayRef<Requirement> reqts) const {
   // Check that the requirements satisfy certain invariants.
   for (unsigned idx : indices(reqts)) {
     const auto &reqt = reqts[idx].getCanonical();
+
+    if (reqt.refersToUnsupportedNestedType()) {
+      return;
+    }
 
     // Left-hand side must be a canonical type parameter.
     if (reqt.getKind() != RequirementKind::SameType) {
@@ -1040,6 +1070,8 @@ void GenericSignature::verify(ArrayRef<Requirement> reqts) const {
     }
   }
 }
+
+
 
 static Type stripBoundDependentMemberTypes(Type t) {
   if (auto *depMemTy = t->getAs<DependentMemberType>()) {

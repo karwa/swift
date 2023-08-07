@@ -4937,6 +4937,62 @@ bool NominalTypeDecl::isMainActor() const {
          getParentModule()->getName() == getASTContext().Id_Concurrency;
 }
 
+bool NominalTypeDecl::isUnsupportedNestedType() {
+  auto *DC = getDeclContext();
+  auto kind = DC->getFragileFunctionKind();
+  if (kind.kind != FragileFunctionKind::None) {
+    diagnose(diag::local_type_in_inlinable_function, getName(), kind.getSelector());
+  }
+
+  if (isa<ProtocolDecl>(this)) {
+    if (getASTContext().LangOpts.hasFeature(Feature::NestedProtocols)) {
+      // Protocols may only be nested in non-generic contexts.
+      if (getParent()->isGenericContext()) {
+        if (getParent()->getSelfProtocolDecl()) {
+          diagnose(diag::unsupported_nested_protocol_in_protocol, getName());
+        } else {
+          diagnose(diag::unsupported_nested_protocol_in_generic_context, getName());
+        }
+        setInvalid();
+        return true;
+      }
+    } else {
+      // We don't support protocols outside the top level of a file.
+      if (!getParent()->isModuleScopeContext()) {
+        diagnose(diag::unsupported_nested_protocol, getName());
+        setInvalid();
+        return true;
+      }
+    }
+  }
+
+  // We don't support nested types in protocols.
+  if (auto proto = DC->getSelfProtocolDecl()) {
+    if (DC->getExtendedProtocolDecl()) {
+      diagnose(diag::unsupported_type_nested_in_protocol_extension, getName(), proto->getName());
+    } else {
+      diagnose(diag::unsupported_type_nested_in_protocol, getName(), proto->getName());
+    }
+    setInvalid();
+    return true;
+  }
+
+  // We don't support nested types in generic functions yet.
+  if (isGenericContext()) {
+    if (DC->isLocalContext() && DC->isGenericContext()) {
+      // A local generic context is a generic function.
+      if (auto AFD = dyn_cast<AbstractFunctionDecl>(DC)) {
+        diagnose(diag::unsupported_type_nested_in_generic_function, getName(), AFD->getName());
+      } else {
+        diagnose(diag::unsupported_type_nested_in_generic_closure, getName());
+      }
+      return true;
+    }
+  }
+
+  return false;
+}
+
 GenericTypeDecl::GenericTypeDecl(DeclKind K, DeclContext *DC,
                                  Identifier name, SourceLoc nameLoc,
                                  ArrayRef<InheritedEntry> inherited,

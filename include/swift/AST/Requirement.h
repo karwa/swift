@@ -175,6 +175,8 @@ public:
 
   ProtocolDecl *getProtocolDecl() const;
 
+  bool refersToUnsupportedNestedType() const;
+
   /// Determines if this substituted requirement is satisfied.
   ///
   /// \param subReqs An out parameter initialized to a list of simpler

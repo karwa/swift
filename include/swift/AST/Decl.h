@@ -4056,6 +4056,8 @@ public:
   /// Returns null if the type is a class, or does not have a declared `deinit`.
   DestructorDecl *getValueTypeDestructor();
 
+  bool isUnsupportedNestedType();
+
   // Implement isa/cast/dyncast/etc.
   static bool classof(const Decl *D) {
     return D->getKind() >= DeclKind::First_NominalTypeDecl &&

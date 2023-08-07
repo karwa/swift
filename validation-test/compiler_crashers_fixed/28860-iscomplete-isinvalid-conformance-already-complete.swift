@@ -7,4 +7,10 @@
 
 
 // RUN: not %target-swift-frontend %s -emit-ir
-{class a:P{let d=a}@objc protocol P{class a{}{}typealias a
+class a:P {
+  let d=a
+}
+
+@objc protocol P {
+  typealias a
+}
