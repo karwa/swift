@@ -5011,6 +5011,70 @@ bool NominalTypeDecl::isMainActor() const {
          getParentModule()->getName() == getASTContext().Id_Concurrency;
 }
 
+bool NominalTypeDecl::isUnsupportedNestedType(bool diagnose) const {
+
+  auto *DC = getDeclContext();
+  auto kind = DC->getFragileFunctionKind();
+  if (kind.kind != FragileFunctionKind::None) {
+    if (diagnose)
+      this->diagnose(diag::local_type_in_inlinable_function, getName(), kind.getSelector());
+    return true;
+  }
+
+  if (isa<ProtocolDecl>(this)) {
+    if (getASTContext().LangOpts.hasFeature(Feature::NestedProtocols)) {
+      // Protocols may only be nested in non-generic contexts.
+      if (getParent()->isGenericContext()) {
+        if (diagnose) {
+          if (getParent()->getSelfProtocolDecl()) {
+            this->diagnose(diag::unsupported_nested_protocol_in_protocol, this);
+          } else {
+            this->diagnose(diag::unsupported_nested_protocol_in_generic_context, this);
+          }
+        }
+        return true;
+      }
+    } else {
+      // We don't support protocols outside the top level of a file.
+      if (!getParent()->isModuleScopeContext()) {
+        if (diagnose)
+          this->diagnose(diag::unsupported_nested_protocol, this);
+        return true;
+      }
+    }
+  }
+
+  // We don't support nested types in protocols.
+  if (auto proto = DC->getSelfProtocolDecl()) {
+    if (diagnose) {
+      if (DC->getExtendedProtocolDecl()) {
+        this->diagnose(diag::unsupported_type_nested_in_protocol_extension, this, proto);
+      } else {
+        this->diagnose(diag::unsupported_type_nested_in_protocol, this, proto);
+      }
+    }
+    return true;
+  }
+
+  // We don't support nested types in generic functions yet.
+  if (isGenericContext()) {
+    if (DC->isLocalContext() && DC->isGenericContext()) {
+      if (diagnose) {
+        // A local generic context is a generic function.
+        if (auto AFD = dyn_cast<AbstractFunctionDecl>(DC)) {
+          this->diagnose(diag::unsupported_type_nested_in_generic_function, this,
+                         AFD);
+        } else {
+          this->diagnose(diag::unsupported_type_nested_in_generic_closure, this);
+        }
+      }
+      return true;
+    }
+  }
+
+  return false;
+}
+
 GenericTypeDecl::GenericTypeDecl(DeclKind K, DeclContext *DC,
                                  Identifier name, SourceLoc nameLoc,
                                  ArrayRef<InheritedEntry> inherited,

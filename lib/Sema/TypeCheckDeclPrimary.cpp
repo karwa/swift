@@ -2665,56 +2665,8 @@ public:
   }
 
   void checkUnsupportedNestedType(NominalTypeDecl *NTD) {
-    auto *DC = NTD->getDeclContext();
-    auto kind = DC->getFragileFunctionKind();
-    if (kind.kind != FragileFunctionKind::None) {
-      NTD->diagnose(diag::local_type_in_inlinable_function, NTD->getName(),
-                    kind.getSelector());
-    }
-
-    if (isa<ProtocolDecl>(NTD)) {
-      if (NTD->getASTContext().LangOpts.hasFeature(Feature::NestedProtocols)) {
-        // Protocols may only be nested in non-generic contexts.
-        if (NTD->getParent()->isGenericContext()) {
-          if (NTD->getParent()->getSelfProtocolDecl()) {
-            NTD->diagnose(diag::unsupported_nested_protocol_in_protocol, NTD);
-          } else {
-            NTD->diagnose(diag::unsupported_nested_protocol_in_generic_context, NTD);
-          }
-          NTD->setInvalid();
-          return;
-        }
-      } else {
-        // We don't support protocols outside the top level of a file.
-        if (!NTD->getParent()->isModuleScopeContext()) {
-          NTD->diagnose(diag::unsupported_nested_protocol, NTD);
-          NTD->setInvalid();
-          return;
-        }
-      }
-    }
-
-    // We don't support nested types in protocols.
-    if (auto proto = DC->getSelfProtocolDecl()) {
-      if (DC->getExtendedProtocolDecl()) {
-        NTD->diagnose(diag::unsupported_type_nested_in_protocol_extension, NTD,
-                      proto);
-      } else {
-        NTD->diagnose(diag::unsupported_type_nested_in_protocol, NTD, proto);
-      }
-    }
-
-    // We don't support nested types in generic functions yet.
-    if (NTD->isGenericContext()) {
-      if (DC->isLocalContext() && DC->isGenericContext()) {
-        // A local generic context is a generic function.
-        if (auto AFD = dyn_cast<AbstractFunctionDecl>(DC)) {
-          NTD->diagnose(diag::unsupported_type_nested_in_generic_function, NTD,
-                        AFD);
-        } else {
-          NTD->diagnose(diag::unsupported_type_nested_in_generic_closure, NTD);
-        }
-      }
+    if (NTD->isUnsupportedNestedType(/* diagnose= */ true)) {
+      NTD->setInvalid();
     }
   }
 

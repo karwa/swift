@@ -5085,11 +5085,13 @@ Type TypeChecker::substMemberTypeWithBase(ModuleDecl *module,
   // The declared interface type for a generic type will have the type
   // arguments; strip them off.
   if (auto *nominalDecl = dyn_cast<NominalTypeDecl>(member)) {
-    // If the base type is not a nominal type, we might be looking up a
-    // nominal member of a generic parameter. This is not supported right
-    // now, but at least don't crash.
-    if (member->getDeclContext()->getSelfProtocolDecl())
-      return nominalDecl->getDeclaredType();
+    // Unsupported nested types are things like:
+    // - protocols in generic contexts
+    // - nominal types in protocols
+    // We can't produce a subtituted member type for those.
+    if (nominalDecl->isUnsupportedNestedType(/* diagnose= */ false)) {
+      return ErrorType::get(nominalDecl->getASTContext());
+    }
 
     if (!isa<ProtocolDecl>(nominalDecl) &&
         nominalDecl->getGenericParams()) {
