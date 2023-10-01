@@ -414,6 +414,18 @@ Type RequirementMachine::getReducedType(
     // true most of the time.
     auto prefix = getLongestValidPrefix(term);
 
+    // If a generic type is inside a protocol inside another generic context,
+    // the protocol in the middle blocks the type's context
+    // inheriting parameters from the outer context.
+    //
+    // That means we will not find a valid prefix (with those outer parameters)
+    // in this requirement machine's signature.
+    //
+    // Since protocols may not be nested in generic contexts,
+    // the type we are reducing is not valid.
+    if (prefix.empty())
+      return ErrorType::get(type);
+
     // Get a type (concrete or dependent) for U.
     auto prefixType = [&]() -> Type {
       verify(prefix);
