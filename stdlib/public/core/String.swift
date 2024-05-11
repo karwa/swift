@@ -743,6 +743,81 @@ extension String {
   }
 }
 
+extension String {
+
+  /// Creates a string corresponding to the given sequence of Unicode
+  /// scalars.
+  ///
+  /// - parameters:
+  ///   - scalars: A sequence of Unicode scalar values.
+  ///
+  @inlinable
+  @_alwaysEmitIntoClient
+  public init(_ scalars: consuming some Sequence<Unicode.Scalar>) {
+
+    if let contig = scalars.withContiguousStorageIfAvailable({ String($0) }) {
+      self = contig
+      return
+    }
+    var utf8 = [UInt8]()
+    for scalar in scalars {
+      scalar.withUTF8CodeUnits { utf8.append(contentsOf: $0) }
+    }
+    self = utf8.withUnsafeBufferPointer { String._uncheckedFromUTF8($0) }
+  }
+
+  /// Creates a string corresponding to the given sequence of Unicode
+  /// scalars.
+  ///
+  /// - parameters:
+  ///   - scalars: A sequence of Unicode scalar values.
+  ///
+  @inlinable
+  @available(SwiftStdlib 9999, *)
+  public init(
+    _ scalars: consuming Unicode.NormalizedScalars<some Sequence>.NFC
+  ) {
+    var utf8 = [UInt8]()
+    for scalar in scalars {
+      scalar.withUTF8CodeUnits { utf8.append(contentsOf: $0) }
+    }
+    self = utf8.withUnsafeBufferPointer { String._uncheckedFromUTF8($0) }
+    self._guts.markIsNFC()
+  }
+
+  /// Creates a string corresponding to the given collection of Unicode
+  /// scalars.
+  ///
+  /// - parameters:
+  ///   - scalars: A collection of Unicode scalar values.
+  ///
+  @inlinable
+  @_alwaysEmitIntoClient
+  public init(
+    // FIXME: Should be 'borrowing', but doesn't work yet.
+    _ scalars: some RandomAccessCollection<Unicode.Scalar>
+  ) {
+    // UTF-8 produces a maximum of 4 bytes per scalar.
+    // Knowing the count means we have an upper-bound on how much buffer space
+    // we need for encoding, so can possibly allocate it on the stack.
+    self = _withUnprotectedUnsafeTemporaryAllocation(
+      of: UInt8.self, capacity: scalars.count * 4
+    ) { buffer in
+      var i = 0
+      for scalar in scalars {
+        scalar.withUTF8CodeUnits {
+          let remainder = buffer[Range(uncheckedBounds: (i, buffer.endIndex))]
+          i = remainder.initialize(fromContentsOf: $0)
+        }
+      }
+      let encodedContents = UnsafeBufferPointer(
+        rebasing: buffer[Range(uncheckedBounds: (buffer.startIndex, i))]
+      )
+      return String._uncheckedFromUTF8(encodedContents)
+    }
+  }
+}
+
 extension String: _ExpressibleByBuiltinUnicodeScalarLiteral {
   @_effects(readonly)
   @inlinable @inline(__always)
@@ -1159,7 +1234,7 @@ extension _StringGutsSlice {
       }
     }
 
-    for scalar in substring.unicodeScalars._internalNFC {
+    for scalar in substring.unicodeScalars.normalized.nfc {
       try scalar.withUTF8CodeUnits {
         for byte in $0 {
           try f(byte)

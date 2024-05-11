@@ -10,52 +10,64 @@
 //
 //===----------------------------------------------------------------------===//
 
-extension Sequence where Element == Unicode.Scalar {
-  internal var _internalNFD: Unicode._InternalNFD<Self> {
-    Unicode._InternalNFD(self)
-  }
-}
-
-extension Unicode  {
+extension Unicode.NormalizedScalars where Source: Sequence<Unicode.Scalar> {
 
   /// The contents of the source sequence, in Normalization Form D.
   ///
   /// Normalization to NFD preserves canonical equivalence.
   ///
-  internal struct _InternalNFD<Source> where Source: Sequence<Unicode.Scalar> {
+  @inlinable
+  public var nfd: NFD {
+    Unicode.NormalizedScalars.NFD(source)
+  }
 
+  /// The contents of the source sequence, in Normalization Form D.
+  ///
+  /// Normalization to NFD preserves canonical equivalence.
+  ///
+  @frozen
+  public struct NFD {
+
+    @usableFromInline
     internal let source: Source
 
+    @inlinable
     internal init(_ source: Source) {
       self.source = source
     }
   }
 }
 
-extension Unicode._InternalNFD: Sequence {
+extension Unicode.NormalizedScalars.NFD: Sequence {
 
-  internal consuming func makeIterator() -> Iterator {
+  @inlinable
+  public consuming func makeIterator() -> Iterator {
     Iterator(source: source.makeIterator())
   }
 
-  internal struct Iterator: IteratorProtocol {
+  @frozen
+  public struct Iterator: IteratorProtocol {
 
-    internal var source: Source.Iterator
-    internal var normalizer: Unicode._NFDNormalizer
+    public var source: Source.Iterator
 
+    @usableFromInline
+    internal var normalizer: Unicode.NFDNormalizer
+
+    @inlinable
     internal init(source: Source.Iterator) {
       self.source = source
-      self.normalizer = Unicode._NFDNormalizer()
+      self.normalizer = Unicode.NFDNormalizer()
     }
 
-    internal mutating func next() -> Unicode.Scalar? {
+    @inlinable
+    public mutating func next() -> Unicode.Scalar? {
       normalizer.resume(consuming: &source) ?? normalizer.flush()
     }
   }
 }
 
-extension Unicode._InternalNFD: Sendable where Source: Sendable {}
-extension Unicode._InternalNFD.Iterator: Sendable where Source.Iterator: Sendable {}
+extension Unicode.NormalizedScalars.NFD: Sendable where Source: Sendable {}
+extension Unicode.NormalizedScalars.NFD.Iterator: Sendable where Source.Iterator: Sendable {}
 
 extension Unicode {
 
@@ -94,7 +106,7 @@ extension Unicode {
   /// boundary. The normalizer state has value semantics, so it is possible
   /// to copy and store and is inherently thread-safe.
   ///
-  internal struct _NFDNormalizer: Sendable {
+  public struct NFDNormalizer: Sendable {
 
     internal enum State {
       case emittingSegment
@@ -110,7 +122,7 @@ extension Unicode {
 
     /// Creates a new normalizer.
     ///
-    internal init() { }
+    public init() { }
 
     /// Resume normalizing the text stream.
     ///
@@ -152,14 +164,15 @@ extension Unicode {
     /// Be careful to ensure each input source has been fully consumed
     /// before moving on to the next source (marked by `resume` returning `nil`).
     ///
-    internal mutating func resume(
+    @inlinable
+    public mutating func resume(
       consuming source: inout some IteratorProtocol<Unicode.Scalar>
     ) -> Unicode.Scalar? {
       resume(consuming: { source.next() })
     }
 
-    // Intended ABI barrier for resume(consuming: inout some IteratorProtocol<Unicode.Scalar>).
-    // when it becomes public.
+    // ABI barrier for resume(consuming: inout some IteratorProtocol<Unicode.Scalar>).
+    @usableFromInline
     internal mutating func resume(
       consuming nextFromSource: () -> Unicode.Scalar?
     ) -> Unicode.Scalar? {
@@ -194,13 +207,22 @@ extension Unicode {
     ///   print(scalar)
     /// }
     /// ```
-    internal mutating func flush() -> Unicode.Scalar? {
+    ///
+    public mutating func flush() -> Unicode.Scalar? {
       _flush()?.scalar
+    }
+
+    internal mutating func reset() {
+      state = .consuming
+      buffer.storage.removeAll(keepingCapacity: true)
+      buffer.isReversed = false
+      pendingStarter = .none
+      bufferIsSorted = false
     }
   }
 }
 
-extension Unicode._NFDNormalizer {
+extension Unicode.NFDNormalizer {
 
   @inline(never)
   internal mutating func _resume(

@@ -193,6 +193,7 @@ split_embedded_sources(
     NORMAL ThreadLocalStorage.swift
     NORMAL UIntBuffer.swift
     NORMAL UnavailableStringAPIs.swift
+    NORMAL Unicode+NormalizedScalars.swift
     NORMAL UnicodeData.swift
     NORMAL UnicodeEncoding.swift
     NORMAL UnicodeBreakProperty.swift

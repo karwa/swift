@@ -11,17 +11,17 @@
 //===----------------------------------------------------------------------===//
 
 // rdar://85480347
-// REQUIRES: rdar85480347
+// REQUIR--ES: rdar85480347
 
 // RUN: %empty-directory(%t)
 // RUN: %target-clang -fobjc-arc %S/Inputs/NSSlowString/NSSlowString.m -c -o %t/NSSlowString.o
-// RUN: %target-build-swift -I %S/Inputs/NSSlowString/ %t/NSSlowString.o %s -o %t/a.out
+// RUN: %target-build-swift -Xfrontend -disable-availability-checking -I %S/Inputs/NSSlowString/ %t/NSSlowString.o %s -o %t/a.out
 
 // RUN: %target-codesign %t/a.out
 // RUN: %target-run %t/a.out %S/Inputs/NormalizationTest.txt %S/Inputs/NormalizationTest15.txt
-// REQUIRES: executable_test
-// REQUIRES: objc_interop
-// REQUIRES: optimized_stdlib
+// REQUIR--ES: executable_test
+// REQUIR--ES: objc_interop
+// REQUIR--ES: optimized_stdlib
 
 import Swift
 import StdlibUnittest
@@ -43,6 +43,16 @@ private func expectEqualIterators(
 ) {
   let expectedString = String(decoding: expected, as: UTF8.self)
   let expectedCodeUnits = expectedString._nfcCodeUnits
+
+  if #available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *) { // FIXME: Whenever .nfd and .nfc get added.
+    if let expectedNFD = others["NFD"] {
+      expectTrue(expectedString.unicodeScalars.normalized.nfd.flatMap { $0.utf8 }.elementsEqual(expectedNFD))
+    }
+    if let expectedNFC = others["NFC"] {
+      expectTrue(expectedString.unicodeScalars.normalized.nfc.flatMap { $0.utf8 }.elementsEqual(expectedNFC))
+    }
+  }
+
   for (otherLabel, other) in others {
     let otherString = String(decoding: other, as: UTF8.self)
     expectEqual(
@@ -51,6 +61,53 @@ private func expectEqualIterators(
       "\(label) vs \(otherLabel)",
       stackTrace: stackTrace.pushIf(showFrame, file: file, line: line))
   }
+}
+
+//@available(SwiftStdlib 9999, *)
+private func expectEqualIteratorsAsync(
+  label: String,
+  expected: [UInt8],
+  others: [String: [UInt8]],
+  _ message: @autoclosure () -> String = "",
+  showFrame: Bool = true,
+  stackTrace: SourceLocStack = SourceLocStack(),
+  file: String = #file,
+  line: UInt = #line
+) async {
+  let expectedString = String(decoding: expected, as: UTF8.self)
+  // let expectedCodeUnits = expectedString._nfcCodeUnits
+
+  //if #available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *) { // FIXME: Whenever .nfd and .nfc get added.
+    if let expectedNFD = others["NFD"] {
+      var it = expectedString.unicodeScalars.makeIterator()
+      var scalars = [Unicode.Scalar]()
+      for await scalar in AsyncStream(unfolding: { it.next() }).normalized.nfd {
+        scalars.append(scalar)
+      }
+      let utf8 = scalars.flatMap { $0.utf8 }
+      expectTrue(utf8.elementsEqual(expectedNFD))
+    }
+
+    if let expectedNFC = others["NFC"] {
+      var it = expectedString.unicodeScalars.makeIterator()
+      var scalars = [Unicode.Scalar]()
+      for await scalar in AsyncStream(unfolding: { it.next() }).normalized.nfc {
+        scalars.append(scalar)
+      }
+      let utf8 = scalars.flatMap { $0.utf8 }
+      expectTrue(utf8.elementsEqual(expectedNFC), "Expected: \(expectedNFC)\nActual:   \(utf8)")
+    }
+
+  //}
+
+  // for (otherLabel, other) in others {
+  //   let otherString = String(decoding: other, as: UTF8.self)
+  //   expectEqual(
+  //     expectedCodeUnits,
+  //     otherString._nfcCodeUnits,
+  //     "\(label) vs \(otherLabel)",
+  //     stackTrace: stackTrace.pushIf(showFrame, file: file, line: line))
+  // }
 }
 
 var tests = TestSuite("StringNormalization")
@@ -115,7 +172,27 @@ if #available(SwiftStdlib 5.9, *) {
         stackTrace: SourceLocStack(test.loc)
       )
     }
-  }
+ }
+
+  //#if SWIFT_ENABLE_EXPERIMENTAL_CONCURRENCY
+    tests.test("StringNormalization15/AsyncConvertToNFD")
+    .code {
+      for test in normalizationTests14 {
+        await expectEqualIteratorsAsync(
+          label: "NFD",
+          expected: test.NFC,
+          others: [
+            "source": test.source,
+            "NFC": test.NFC,
+            "NFD": test.NFD
+          ],
+          stackTrace: SourceLocStack(test.loc)
+        )
+      }
+    }
+  //#endif
+
+
 
   tests.test("StringNormalization15/ConvertNFK*ToNFKC")
   .code {
@@ -548,4 +625,4 @@ for (i, test) in codeUnitNormalizationTests.enumerated() {
 #endif
 }
 
-runAllTests()
+await runAllTestsAsync()
