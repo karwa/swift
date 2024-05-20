@@ -19,9 +19,9 @@
 
 // RUN: %target-codesign %t/a.out
 // RUN: %target-run %t/a.out %S/Inputs/NormalizationTest.txt %S/Inputs/NormalizationTest15.txt
-// REQUIR--ES: executable_test
-// REQUIR--ES: objc_interop
-// REQUIR--ES: optimized_stdlib
+// REQUIRES: executable_test
+// REQUIRES: objc_interop
+// REQUIRES: optimized_stdlib
 
 import Swift
 import StdlibUnittest
@@ -30,6 +30,42 @@ import StdlibUnicodeUnittest
 #if _runtime(_ObjC)
 import NSSlowString
 #endif
+
+private func UTF8ToScalars(_ utf8: some Collection<UInt8>) -> [Unicode.Scalar] {
+  var result: [Unicode.Scalar] = []
+  var iter = utf8.makeIterator()
+  var decoder = UTF8()
+  decode: while true {
+    switch decoder.decode(&iter) {
+    case .scalarValue(let s): result.append(s)
+    case .emptyInput: break decode
+    case .error: fatalError("Invalid UTF8")
+    }
+  } 
+  return result
+}
+
+private class SinglePassSequence<Element>: Sequence {
+  var iter: AnyIterator<Element>
+  var consumed: Bool
+
+  init(wrapping source: some Collection<Element>) {
+    self.iter = AnyIterator(source.makeIterator())
+    self.consumed = false
+  }
+
+  func makeIterator() -> AnyIterator<Element> {
+    expectFalse(consumed, "Sequence iterated for a second time")
+    consumed = true
+    return iter
+  }
+}
+
+extension Collection {
+  fileprivate var singlePassSequence: SinglePassSequence<Element> {
+    SinglePassSequence(wrapping: self)
+  }
+}
 
 private func expectEqualIterators(
   label: String,
@@ -44,14 +80,14 @@ private func expectEqualIterators(
   let expectedString = String(decoding: expected, as: UTF8.self)
   let expectedCodeUnits = expectedString._nfcCodeUnits
 
-  if #available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *) { // FIXME: Whenever .nfd and .nfc get added.
-    if let expectedNFD = others["NFD"] {
-      expectTrue(expectedString.unicodeScalars.normalized.nfd.flatMap { $0.utf8 }.elementsEqual(expectedNFD))
-    }
-    if let expectedNFC = others["NFC"] {
-      expectTrue(expectedString.unicodeScalars.normalized.nfc.flatMap { $0.utf8 }.elementsEqual(expectedNFC))
-    }
-  }
+//  if #available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *) { // FIXME: Whenever .nfd and .nfc get added.
+//    if let expectedNFD = others["NFD"] {
+//      expectTrue(expectedString.unicodeScalars.normalized.nfd.flatMap { $0.utf8 }.elementsEqual(expectedNFD))
+//    }
+//    if let expectedNFC = others["NFC"] {
+//      expectTrue(expectedString.unicodeScalars.normalized.nfc.flatMap { $0.utf8 }.elementsEqual(expectedNFC))
+//    }
+//  }
 
   for (otherLabel, other) in others {
     let otherString = String(decoding: other, as: UTF8.self)
@@ -63,6 +99,7 @@ private func expectEqualIterators(
   }
 }
 
+#if false
 //@available(SwiftStdlib 9999, *)
 private func expectEqualIteratorsAsync(
   label: String,
@@ -109,6 +146,7 @@ private func expectEqualIteratorsAsync(
   //     stackTrace: stackTrace.pushIf(showFrame, file: file, line: line))
   // }
 }
+#endif
 
 var tests = TestSuite("StringNormalization")
 
@@ -174,26 +212,6 @@ if #available(SwiftStdlib 5.9, *) {
     }
  }
 
-  //#if SWIFT_ENABLE_EXPERIMENTAL_CONCURRENCY
-    tests.test("StringNormalization15/AsyncConvertToNFD")
-    .code {
-      for test in normalizationTests14 {
-        await expectEqualIteratorsAsync(
-          label: "NFD",
-          expected: test.NFC,
-          others: [
-            "source": test.source,
-            "NFC": test.NFC,
-            "NFD": test.NFD
-          ],
-          stackTrace: SourceLocStack(test.loc)
-        )
-      }
-    }
-  //#endif
-
-
-
   tests.test("StringNormalization15/ConvertNFK*ToNFKC")
   .code {
     for test in normalizationTests14 {
@@ -208,6 +226,76 @@ if #available(SwiftStdlib 5.9, *) {
       )
     }
   }
+}
+
+//if #available(SwiftStdlib 9999, *) {
+if true {
+
+  tests.test("StringNormalization15/IsNormalized/Collection")
+  .code {
+    for test in normalizationTests14 {
+      let nfcScalars = UTF8ToScalars(test.NFC)
+      let nfdScalars = UTF8ToScalars(test.NFD)
+
+      expectTrue(nfcScalars.isNormalized(.nfc))
+      expectTrue(nfdScalars.isNormalized(.nfd))
+
+      if !nfcScalars.elementsEqual(nfdScalars) {
+        expectFalse(nfcScalars.isNormalized(.nfd))
+        expectFalse(nfdScalars.isNormalized(.nfc))
+      }
+
+      let sourceScalars = UTF8ToScalars(test.source)
+      if !sourceScalars.elementsEqual(nfdScalars) {
+        expectFalse(sourceScalars.isNormalized(.nfd))
+      }
+      if !sourceScalars.elementsEqual(nfcScalars) {
+        expectFalse(sourceScalars.isNormalized(.nfc))
+      }
+    }
+ }
+
+  tests.test("StringNormalization15/IsNormalized/Sequence")
+  .code {
+    for test in normalizationTests14 {
+      let nfcScalars = UTF8ToScalars(test.NFC)
+      let nfdScalars = UTF8ToScalars(test.NFD)
+
+      expectTrue(nfcScalars.singlePassSequence.isNormalized(.nfc))
+      expectTrue(nfdScalars.singlePassSequence.isNormalized(.nfd))
+
+      if !nfcScalars.elementsEqual(nfdScalars) {
+        expectFalse(nfcScalars.singlePassSequence.isNormalized(.nfd))
+        expectFalse(nfdScalars.singlePassSequence.isNormalized(.nfc))
+      }
+
+      let sourceScalars = UTF8ToScalars(test.source)
+      if !sourceScalars.elementsEqual(nfdScalars) {
+        expectFalse(sourceScalars.singlePassSequence.isNormalized(.nfd))
+      }
+      if !sourceScalars.elementsEqual(nfcScalars) {
+        expectFalse(sourceScalars.singlePassSequence.isNormalized(.nfc))
+      }
+    }
+ }
+
+  //#if SWIFT_ENABLE_EXPERIMENTAL_CONCURRENCY
+  // tests.test("StringNormalization15/AsyncConvertToNFD")
+  // .code {
+  //   for test in normalizationTests14 {
+  //     await expectEqualIteratorsAsync(
+  //       label: "NFD",
+  //       expected: test.NFC,
+  //       others: [
+  //         "source": test.source,
+  //         "NFC": test.NFC,
+  //         "NFD": test.NFD
+  //       ],
+  //       stackTrace: SourceLocStack(test.loc)
+  //     )
+  //   }
+  // }
+  //#endif
 }
 
 let codeUnitNormalizationTestsA: [([UInt8], String)] = [

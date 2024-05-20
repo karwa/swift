@@ -45,6 +45,7 @@
     "Substring.swift",
     "Unicode.swift",
     "Unicode+NormalizedScalars.swift",
+    "UnicodeNormalizationCheck.swift",
     "UnicodeData.swift",
     "UnicodeEncoding.swift",
     "UnicodeBreakProperty.swift",

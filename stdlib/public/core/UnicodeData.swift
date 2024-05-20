@@ -87,6 +87,32 @@ extension Unicode {
 }
 
 extension Unicode {
+
+  @usableFromInline
+  internal struct NFCQCResult: Equatable {
+    internal var rawValue: UInt8
+
+    @usableFromInline
+    internal static var yes: Self   { Self(rawValue: 0) }
+    @usableFromInline
+    internal static var no: Self    { Self(rawValue: 1) }
+    @usableFromInline
+    internal static var maybe: Self { Self(rawValue: 2) }
+
+    @usableFromInline
+    internal static func == (lhs: Self, rhs: Self) -> Bool {
+      lhs.rawValue == rhs.rawValue
+    }
+  }
+}
+extension Unicode._NormData {
+  internal var isNFCQC_Tristate: Unicode.NFCQCResult {
+    let v = UInt8(truncatingIfNeeded: (rawValue & 0x6) &>> 1)
+    return Unicode.NFCQCResult(rawValue: v)
+  }
+}
+
+extension Unicode {
   // A wrapper type for normalization buffers in the NFC and NFD iterators.
   // This helps remove some of the buffer logic like removal and sorting out of
   // the iterators and into this type.
